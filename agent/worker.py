@@ -593,6 +593,18 @@ The Gofer tool descriptions explain their arguments:
                 reason=str(error),
             )
             run_claude(context, None)
+        except claude_backend.ClaudeError as error:
+            if "Prompt is too long" not in str(error):
+                raise
+            # The session cannot take another turn. Let go of it, so the next message starts
+            # a new one from the recent conversation; this turn is not run again, because
+            # it may already have acted.
+            emit("session", native_id=None)
+            raise claude_backend.ClaudeError(
+                "This thread's Claude session grew past what the model can read, so it has "
+                "been closed. Send the message again: a fresh session starts with the recent "
+                "conversation replayed."
+            ) from None
         return
     config = CodexConfig(
         codex_bin=shutil.which("codex"),

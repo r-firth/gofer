@@ -402,6 +402,9 @@ async def _run(
         cli_path=cli,
         cwd=cwd,
         resume=resume,
+        # One tool result (a window's full state, a screenshot) can be many megabytes; the
+        # SDK's default of 1 MB per message ends the session when one is larger.
+        max_buffer_size=64 * 1024 * 1024,
         system_prompt={"type": "preset", "preset": "claude_code", "append": base},
         model=os.environ.get("HUB_CLAUDE_MODEL") or "claude-opus-5-5",
         effort="medium",

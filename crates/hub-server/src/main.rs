@@ -1879,6 +1879,23 @@ impl Drop for AgentGroup {
         }
     }
 }
+/// Cuts every long string inside a value down to `max` characters, saying how much was left out.
+/// What an agent reads back (a strand's history, its own thread) must not carry whole files,
+/// window dumps or pictures: one of those can fill the model's context by itself.
+fn slim(value: &mut Value, max: usize) {
+    match value {
+        Value::String(text) if text.len() > max => {
+            let kept: String = text.chars().take(max).collect();
+            let left = text.chars().count().saturating_sub(max);
+            if left > 0 {
+                *text = format!("{kept} [and {left} more characters, left out]");
+            }
+        }
+        Value::Array(items) => items.iter_mut().for_each(|item| slim(item, max)),
+        Value::Object(fields) => fields.values_mut().for_each(|field| slim(field, max)),
+        _ => {}
+    }
+}
 async fn agent_turn(h: &Shared, id: &str, recall: Vec<Value>) -> Result<()> {
     let access = agent_api::Access::new(h, id);
     let conversation = h
@@ -1907,7 +1924,10 @@ async fn agent_turn(h: &Shared, id: &str, recall: Vec<Value>) -> Result<()> {
         json!({})
     };
 
-    let history = context_events(h, id);
+    let mut history = context_events(h, id);
+    for event in &mut history {
+        slim(&mut event.payload, 6000);
+    }
     let claude = conversation
         .agent
         .as_ref()
@@ -2171,6 +2191,9 @@ async fn execute_tool(h: &Shared, chat_id: &str, name: &str, args: &Value) -> Re
                 .take(40)
                 .collect();
             events.reverse();
+            for event in &mut events {
+                slim(&mut event.payload, 2000);
+            }
             Ok(
                 json!({"chat":chat,"running":h.running.lock().unwrap().contains_key(target),"events":events}),
             )
@@ -2853,6 +2876,22 @@ mod lifecycle_tests {
                 .unwrap()
                 .contains("Memory runtime missing")
         );
+    }
+
+    #[test]
+    fn long_strings_are_cut_wherever_they_sit_and_short_ones_are_left() {
+        let mut value = json!({"a": "x".repeat(50), "b": ["short", {"c": "y".repeat(12)}], "n": 7});
+        slim(&mut value, 10);
+        assert_eq!(
+            value["a"],
+            format!("{} [and 40 more characters, left out]", "x".repeat(10))
+        );
+        assert_eq!(value["b"][0], "short");
+        assert_eq!(
+            value["b"][1]["c"],
+            format!("{} [and 2 more characters, left out]", "y".repeat(10))
+        );
+        assert_eq!(value["n"], 7);
     }
 
     #[tokio::test]
