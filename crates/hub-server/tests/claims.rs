@@ -35,11 +35,11 @@ fn supersession_and_retraction_decide_what_is_recalled() {
         .write_claims(
             "thread",
             "Thread",
-            claims(json!([{"text":"Ryan uses uv for Python, never pip.","about":["Ryan"," UV "],"supersedes":[],"evidence":[said.id]}])),
+            claims(json!([{"text":"Sam uses uv for Python, never pip.","about":["Sam"," UV "],"supersedes":[],"evidence":[said.id]}])),
         )
         .unwrap();
     let old = first[0]["id"].as_u64().unwrap();
-    assert_eq!(first[0]["about"], json!(["ryan", "uv"]));
+    assert_eq!(first[0]["about"], json!(["sam", "uv"]));
     assert_eq!(
         recalled(
             &s.recall("Which Python installer, uv or pip?", None, "other", 0)
@@ -59,13 +59,13 @@ fn supersession_and_retraction_decide_what_is_recalled() {
         .write_claims(
             "thread",
             "Thread",
-            claims(json!([{"text":"Ryan uses pixi instead of uv for new Python projects.","about":["ryan","pixi","uv"],"supersedes":[old],"evidence":[correction.id]}])),
+            claims(json!([{"text":"Sam uses pixi instead of uv for new Python projects.","about":["sam","pixi","uv"],"supersedes":[old],"evidence":[correction.id]}])),
         )
         .unwrap();
     let new = second[0]["id"].as_u64().unwrap();
     assert_eq!(
         second[0]["supersedes"],
-        json!([{"id":old,"text":"Ryan uses uv for Python, never pip."}])
+        json!([{"id":old,"text":"Sam uses uv for Python, never pip."}])
     );
     let query = "Which Python installer do I use, uv or pixi?";
     assert_eq!(
@@ -141,7 +141,7 @@ fn supersession_and_retraction_decide_what_is_recalled() {
     );
     assert_eq!(
         reopened.memory_element("node", new).unwrap()["about"],
-        json!(["pixi", "ryan", "uv"])
+        json!(["pixi", "sam", "uv"])
     );
 }
 

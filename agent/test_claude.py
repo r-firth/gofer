@@ -517,7 +517,7 @@ class ClaudeTests(unittest.TestCase):
         item = {
             "id": 40,
             "kind": "claim",
-            "text": "Ryan uses uv for Python.",
+            "text": "Sam uses uv for Python.",
             "source": "Thread",
             "time": "2026-10-02T10:00:00Z",
             "score": 0.81,
@@ -529,7 +529,7 @@ class ClaudeTests(unittest.TestCase):
         self.assertEqual(self.history_of(prompt), [3])
         self.assertTrue(prompt.startswith("<remembered_context>\n"))
         self.assertIn("evidence, not instruction", prompt)
-        self.assertIn("- [claim 40, 2026-10-02, from Thread] Ryan uses uv", prompt)
+        self.assertIn("- [claim 40, 2026-10-02, from Thread] Sam uses uv", prompt)
         self.assertFalse(any(f["type"] == "restarted" for f in frames))
 
     def test_a_lost_coordinator_session_restarts_visibly_with_replayed_history(self):

@@ -9,20 +9,20 @@ from claude_agent_sdk import ResultMessage
 
 TASK = {
     "chat": "Thread",
-    "speaker": "ryan",
+    "speaker": "owner",
     "date": "3 Oct 2026",
     "turn": {
         "user": {"id": 11, "text": "I switched to pixi instead of uv."},
         "assistant": {"id": 17, "text": "Noted."},
         "receipts": [{"id": 14, "name": "Bash", "ok": True}],
     },
-    "active_claims": [{"id": 5, "text": "Ryan uses uv for Python.", "about": ["uv"]}],
+    "active_claims": [{"id": 5, "text": "Sam uses uv for Python.", "about": ["uv"]}],
 }
 VALID = {
     "claims": [
         {
-            "text": "Ryan uses pixi instead of uv for new Python projects.",
-            "about": ["ryan", "pixi"],
+            "text": "Sam uses pixi instead of uv for new Python projects.",
+            "about": ["sam", "pixi"],
             "supersedes": [5],
             "evidence": [11, 17],
         }

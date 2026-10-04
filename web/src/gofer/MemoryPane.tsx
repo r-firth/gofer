@@ -950,7 +950,7 @@ export function MemoryPane({
       api<Element>(`/memory/element/node/${selected}`, undefined, signal),
     enabled: selected !== undefined,
   });
-  // Machines are stored by tailnet id; show the names Ryan knows them by.
+  // Machines are stored by tailnet id; show the names their owner knows them by.
   const rename = useMemo<Rename>(() => {
     const names = new Map(devices.map((d) => [d.id, d.name]));
     return (text) =>

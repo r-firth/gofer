@@ -36,12 +36,12 @@ pub struct Chat {
     pub coordinator_provider: String,
     #[serde(default)]
     pub parent_id: Option<String>,
-    /// A coordinator conversation Ryan talks to Gofer in. There is always the first one, which
+    /// A coordinator conversation the owner talks to Gofer in. There is always the first one, which
     /// cannot be closed; others are opened for a topic and can be.
     #[serde(default)]
     pub thread: bool,
     /// A strand loaded from a session that already existed on the machine: its "user" turns
-    /// are Ryan's own words, not a coordinator's brief.
+    /// are the owner's own words, not a coordinator's brief.
     #[serde(default)]
     pub loaded: bool,
     /// The coordinator's own provider session, resumed every turn.

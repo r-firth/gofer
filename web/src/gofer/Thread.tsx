@@ -532,7 +532,7 @@ function Session({
           <div key={row.id} className="blk you">
             <div className="bh">
               <span className="gt" />
-              <b>{strand.chat.loaded ? "ryan" : "asked"}</b>
+              <b>{strand.chat.loaded ? "you" : "asked"}</b>
             </div>
             <p>
               <i className="ps" aria-hidden="true">
@@ -717,7 +717,7 @@ const Block = memo(
           <div className={`blk you${cls}`}>
             <div className="bh">
               <time className="gt">{clock(item.time)}</time>
-              <b>ryan</b>
+              <b>you</b>
             </div>
             <p>
               <i className="ps" aria-hidden="true">

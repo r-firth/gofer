@@ -2,7 +2,7 @@
 //!
 //! One script is run on the machine over SSH and reports a word per item. Each item then says
 //! what it is for and, when it is missing, either a fix Gofer can apply itself (`fix`) or the
-//! one command Ryan has to run there (`command`): a sign-in, an install that needs his password,
+//! one command the owner has to run there (`command`): a sign-in, an install that needs his password,
 //! a permission only he can grant.
 use crate::terminal;
 use anyhow::{Result, bail};

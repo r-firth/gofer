@@ -411,14 +411,14 @@ async fn gemini_uses_its_retrieval_formats_and_accepts_its_bare_model_name() {
     .await;
     let client = Embedder::new(Some("fixture-key".into()), &url, MODEL, DIMENSIONS).unwrap();
     client
-        .embed_documents(vec!["Ryan uses uv".into()])
+        .embed_documents(vec!["Sam uses uv".into()])
         .await
         .unwrap();
     client.query("package manager").await.unwrap();
     let requests = calls.lock().unwrap().clone();
     assert_eq!(requests[0]["model"], "google/gemini-embedding-2");
     assert_eq!(requests[0]["dimensions"], 768);
-    assert_eq!(requests[0]["input"][0], "title: none | text: Ryan uses uv");
+    assert_eq!(requests[0]["input"][0], "title: none | text: Sam uses uv");
     assert_eq!(
         requests[1]["input"][0],
         "task: search result | query: package manager"

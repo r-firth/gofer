@@ -1784,12 +1784,12 @@ async fn write_memory(h: &Shared, id: &str, run: u64, recalled: &[u64]) -> Resul
         .kill_on_drop(true)
         .spawn()
         .context("Memory runtime missing. Run uv sync --project agent.")?;
-    // In a strand the "user" message is the coordinator's brief to a worker, not Ryan's words.
-    // A loaded session is the exception: Ryan had that conversation himself.
+    // In a strand the "user" message is the coordinator's brief to a worker, not the owner's
+    // words. A loaded session is the exception: the owner had that conversation themselves.
     let speaker = if chat.parent_id.is_some() && !chat.loaded {
         "coordinator"
     } else {
-        "ryan"
+        "owner"
     };
     let date = chrono::Utc::now().format("%-d %b %Y").to_string();
     let input =
@@ -2797,7 +2797,7 @@ mod lifecycle_tests {
             .write_claims(
                 "garage",
                 "Garage",
-                serde_json::from_value(json!([{"text":"Ryan uses uv for Python packages.","about":["uv"],"supersedes":[],"evidence":[said.id]}]))
+                serde_json::from_value(json!([{"text":"Sam uses uv for Python packages.","about":["uv"],"supersedes":[],"evidence":[said.id]}]))
                     .unwrap(),
             )
             .unwrap()[0]["id"]
@@ -2866,7 +2866,7 @@ mod lifecycle_tests {
             .write_claims(
                 "thread",
                 "Thread",
-                serde_json::from_value(json!([{"text":"Ryan uses uv.","about":["uv"],"supersedes":[],"evidence":[said.id]}]))
+                serde_json::from_value(json!([{"text":"Sam uses uv.","about":["uv"],"supersedes":[],"evidence":[said.id]}]))
                     .unwrap(),
             )
             .unwrap()[0]["id"]
@@ -2887,7 +2887,7 @@ mod lifecycle_tests {
                 (event.kind.as_str(), event.scope.as_str()),
                 (kind, "thread")
             );
-            assert_eq!(event.payload, json!({"id":claim,"text":"Ryan uses uv."}));
+            assert_eq!(event.payload, json!({"id":claim,"text":"Sam uses uv."}));
         }
         assert!(
             claim_action(State(h.clone()), Path((claim, "restore".into())))

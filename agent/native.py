@@ -61,6 +61,18 @@ def launch(provider, target, cwd, reverse=None, arguments=None):
     return [*ssh, "--", target, command]
 
 
+OWNER = os.environ.get("HUB_OWNER", "").strip()
+
+
+def named(text):
+    """Put the owner's name into instructions: HUB_OWNER when it is set, "the owner" otherwise."""
+    return (
+        text.replace("@Owner", OWNER or "The owner")
+        .replace("@owner", OWNER or "the owner")
+        .replace("@name", OWNER.lower() or "owner")
+    )
+
+
 def on_device(target, script, timeout=25):
     """Run a short shell script on the execution device. Its output, or None if it did not run."""
     if target and (

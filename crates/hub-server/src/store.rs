@@ -538,7 +538,7 @@ mod tests {
             .unwrap();
         assert_eq!(b.id, a.id + 2, "The fixture must contain an ID gap");
         let claims = serde_json::from_value(
-            json!([{"text":"Ryan uses uv for Python.","about":["Ryan","uv"],"supersedes":[],"evidence":[a.id,b.id]}]),
+            json!([{"text":"Sam uses uv for Python.","about":["Sam","uv"],"supersedes":[],"evidence":[a.id,b.id]}]),
         );
         let claim = store
             .write_claims("chat", "Thread", claims.unwrap())
@@ -579,7 +579,7 @@ mod tests {
         assert_eq!(serde_json::to_value(reopened.events()).unwrap(), before);
         let node = reopened.memory_element("node", claim).unwrap();
         assert_eq!(node["state"], "active");
-        assert_eq!(node["about"], json!(["ryan", "uv"]));
+        assert_eq!(node["about"], json!(["sam", "uv"]));
         assert_eq!(node["evidence"], json!([a.id, b.id]));
         assert_eq!(node["vector"].as_array().unwrap().len(), 384);
         assert_eq!(

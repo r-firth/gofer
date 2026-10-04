@@ -24,7 +24,7 @@
     }
   },
   "open_terminal": {
-    "description": "Open this conversation's persistent terminal on a registered machine, or return the one it already has there (one per machine). Ryan sees it live in that machine's view. Name and cwd apply only when first created. Arguments: {\"device_id\":\"...\", \"name\":\"short descriptive name\", \"cwd\":\"absolute path, or empty for home\"}. Returns its session ID. If Tailscale requires an identity check, a sign-in card appears in chat and this call waits for approval before continuing on the same connection. Do not route around authentication or retry a cancelled check.",
+    "description": "Open this conversation's persistent terminal on a registered machine, or return the one it already has there (one per machine). @Owner sees it live in that machine's view. Name and cwd apply only when first created. Arguments: {\"device_id\":\"...\", \"name\":\"short descriptive name\", \"cwd\":\"absolute path, or empty for home\"}. Returns its session ID. If Tailscale requires an identity check, a sign-in card appears in chat and this call waits for approval before continuing on the same connection. Do not route around authentication or retry a cancelled check.",
     "inputSchema": {
       "type": "object",
       "properties": {},

@@ -3,7 +3,7 @@
 // windows (the alert, a machine with nothing to show), and thinned out under the status line.
 
 export type Mood = {
-  /** Something is waiting on Ryan. */
+  /** Something is waiting on the owner. */
   need: boolean;
   /** Something is working. */
   work: boolean;
