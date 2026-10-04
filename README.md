@@ -25,7 +25,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/r-firth/gofer/releases/download/media/gofer-showreel.mp4"><img src="https://github.com/r-firth/gofer/releases/download/media/demo.gif" alt="Gofer taking two real tasks, running one on another machine in a live terminal, then stepping back through the work" width="1200"></a>
+  <a href="https://github.com/r-firth/gofer/releases/download/media/gofer-showreel.mp4"><img src="https://github.com/r-firth/gofer/releases/download/media/demo.webp" alt="Gofer taking two real tasks, running one on another machine in a live terminal, then stepping back through the work" width="1200"></a>
 </p>
 
 ## What is Gofer?
