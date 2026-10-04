@@ -28,12 +28,14 @@ impl AuthObserver for Observer {
 async fn approval_racing_with_cancellation_cannot_mark_a_shell_as_never_started() {
     let observer = Arc::new(Observer {
         cancel: true,
-        cancel_delay: Duration::from_millis(150),
+        cancel_delay: Duration::from_millis(400),
         ..Default::default()
     });
+    // Wide margins: approval lands well before the cancellation is noticed, and the command
+    // outlives both, however slow the machine running the test is.
     let error = ssh::with_auth(observer, ssh::output(
-        command("printf '# Tailscale SSH requires an additional check.\n# To authenticate, visit: https://login.tailscale.com/a/test-auth\n' >&2; sleep 0.05; printf '# Authentication checked with Tailscale SSH.\n' >&2; sleep 0.3"),
-        Some("server"), Duration::from_secs(1),
+        command("printf '# Tailscale SSH requires an additional check.\n# To authenticate, visit: https://login.tailscale.com/a/test-auth\n' >&2; sleep 0.05; printf '# Authentication checked with Tailscale SSH.\n' >&2; sleep 1.5"),
+        Some("server"), Duration::from_secs(5),
     )).await.unwrap_err();
     assert!(error.to_string().contains("cancelled"));
     assert!(
