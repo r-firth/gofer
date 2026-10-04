@@ -1007,3 +1007,66 @@
     display: none;
   }
 }
+
+/* working with a session on another machine, as a conversation: what Gofer asked, what it said */
+.said {
+  display: grid;
+  grid-template-columns: var(--col) minmax(0, 1fr);
+  margin-top: 2px;
+}
+.said > i {
+  font-style: normal;
+  color: var(--g2);
+  text-align: right;
+  padding-right: 16px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.clamp p {
+  margin: 0;
+  color: var(--g1);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.clamp.cut > p,
+.clamp.cut > .md {
+  max-height: 7.2em;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(#000 60%, transparent);
+  mask-image: linear-gradient(#000 60%, transparent);
+}
+.clamp > button {
+  margin: 2px 0 0 -6px;
+  padding: 0 6px;
+  height: 20px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--g2);
+}
+.clamp > button:hover {
+  color: var(--fg);
+  background: var(--wash);
+}
+.blk.tell .clamp,
+.blk.report .clamp {
+  margin-left: var(--col);
+}
+.blk.tell .clamp > .md,
+.blk.report .clamp > .md {
+  margin-left: 0;
+}
+.blk.report {
+  box-shadow: inset 2px 0 0 var(--hair-3);
+}
+.blk.report .who {
+  padding: 0;
+  border: 0;
+  background: none;
+  font-weight: 700;
+  color: var(--sage);
+}
+.blk.report .who:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}

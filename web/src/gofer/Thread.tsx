@@ -365,10 +365,10 @@ function StrandBlock({
 }) {
   const finished = !["running", "ask"].includes(strand.status);
   const loaded = Boolean(strand.chat.loaded);
-  const [open, setOpen] = useState(!finished && !loaded);
-  useEffect(() => {
-    if (!finished && !loaded) setOpen(true);
-  }, [finished, loaded]);
+  // Its steps are there to be opened; the thread itself shows what was asked and what came back.
+  const [open, setOpen] = useState(false);
+  const brief = loaded ? undefined : strand.turns.find((t) => t.you)?.text;
+  const now = finished ? undefined : strand.steps.at(-1);
   const lastDone = strand.steps.reduce(
     (n, s, i) => (sel === undefined || s.id <= sel ? i : n),
     -1,
@@ -391,17 +391,16 @@ function StrandBlock({
           <button type="button" className="sx" onClick={onOpen}>
             {strand.title.toLowerCase()}
           </button>
-        ) : finished ? (
+        ) : (
           <button
             type="button"
             className="sx"
+            title="Show every step it took"
             aria-expanded={open}
             onClick={() => setOpen(!open)}
           >
             {strand.title.toLowerCase()}
           </button>
-        ) : (
-          <span className="stt">{strand.title.toLowerCase()}</span>
         )}
         <span className={`tag ${tag[0]}`}>
           {loaded ? (
@@ -440,6 +439,17 @@ function StrandBlock({
           open<span aria-hidden="true"> ›</span>
         </button>
       </div>
+      {brief && (
+        <div className="said">
+          <i>asked</i>
+          <Clamp text={brief} />
+        </div>
+      )}
+      {now && !open && (
+        <div className="lines">
+          <Line step={now} sel={sel} onSelect={onSelect} />
+        </div>
+      )}
       {open && !loaded && (
         <div className="lines">
           {strand.steps.map((s) => (
@@ -447,11 +457,24 @@ function StrandBlock({
           ))}
         </div>
       )}
-      {open && !loaded && finished && strand.result && (
-        <Markdown text={strand.result} />
-      )}
       {strand.ask && <Ask event={strand.ask} running={running} compact />}
     </>
+  );
+}
+
+/** Long text, a few lines of it until it is asked for whole. */
+function Clamp({ text, markdown }: { text: string; markdown?: boolean }) {
+  const long = text.length > 420 || text.split("\n").length > 6;
+  const [whole, setWhole] = useState(false);
+  return (
+    <div className={`clamp${long && !whole ? " cut" : ""}`}>
+      {markdown ? <Markdown text={text} /> : <p>{text}</p>}
+      {long && (
+        <button type="button" onClick={() => setWhole(!whole)}>
+          {whole ? "less" : "all of it"}
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -764,6 +787,37 @@ const Block = memo(
               onPick={() => onPick(item.strand.deviceId)}
               onOpen={() => onOpen(item.strand.chat.id)}
             />
+          </div>
+        );
+      case "tell":
+        return (
+          <div className={`blk tell${cls}`}>
+            <div className="bh">
+              <time className="gt">{clock(item.time)}</time>
+              <b>gofer</b>
+              <span className="q">
+                to {item.strand.provider} on {machine}
+              </span>
+            </div>
+            <Clamp text={item.text} />
+          </div>
+        );
+      case "report":
+        return (
+          <div className={`blk report${cls}`}>
+            <div className="bh">
+              <time className="gt">{clock(item.time)}</time>
+              <button
+                type="button"
+                className="who"
+                title={`Talk to this ${item.strand.provider} session`}
+                onClick={() => onOpen(item.strand.chat.id)}
+              >
+                {item.strand.provider}
+              </button>
+              <span className="q">on {machine}</span>
+            </div>
+            <Clamp text={item.text} markdown />
           </div>
         );
       case "ask":
@@ -1388,7 +1442,11 @@ export function Thread({
                   item.k === "ask" || item.k === "view" ? running : false
                 }
                 machine={
-                  item.k === "strand" ? machineName(item.strand.deviceId) : ""
+                  item.k === "strand" ||
+                  item.k === "tell" ||
+                  item.k === "report"
+                    ? machineName(item.strand.deviceId)
+                    : ""
                 }
                 strandRunning={
                   item.k === "strand" && isRunning(item.strand.chat.id)

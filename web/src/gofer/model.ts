@@ -68,6 +68,10 @@ export type Item = Base &
     | { k: "note"; text: string }
     | { k: "steps"; steps: Step[] }
     | { k: "strand"; strand: Strand }
+    /** Gofer saying something more to a strand it started. */
+    | { k: "tell"; strand: Strand; text: string }
+    /** What a strand said back, where Gofer read it. */
+    | { k: "report"; strand: Strand; text: string }
     | { k: "ask"; event: Event }
     | { k: "view"; event: Event }
     | { k: "recalled"; items: RecallItem[]; mode?: string }
@@ -424,6 +428,8 @@ export function threadModel(state: HubState) {
   const thread = state.chats.find((c) => c.id === state.thread_id);
   const scopes = byScope(state.events);
   const strands = new Map<string, Strand>();
+  // The last thing each strand said that the thread has already shown.
+  const heard = new Map<string, number>();
   const items: Item[] = [];
   if (!thread) return { thread, items, strands, steps: [] as Step[] };
   const events = scopes.get(thread.id) ?? [];
@@ -481,6 +487,28 @@ export function threadModel(state: HubState) {
         const strand = strandOf(current, scopes.get(child.id) ?? [], state);
         strands.set(child.id, strand);
         raw.push({ ...base, k: "strand", strand });
+        continue;
+      }
+      // Working with a strand reads as a conversation with it: what Gofer said, and what it
+      // said back. Waiting and looking to see whether it has finished are not shown at all.
+      if (tool === "wait" || tool === "list_agents") continue;
+      const about = strands.get(
+        String(action.start.payload.arguments?.chat_id ?? ""),
+      );
+      if (tool === "send_agent" && about) {
+        const text = String(action.start.payload.arguments?.text ?? "");
+        if (text) raw.push({ ...base, k: "tell", strand: about, text });
+        continue;
+      }
+      if (tool === "read_agent") {
+        const upTo = action.end?.id ?? action.start.id;
+        const reply = [...(about?.turns ?? [])]
+          .reverse()
+          .find((t) => !t.you && t.id <= upTo);
+        if (about && reply && reply.id > (heard.get(about.chat.id) ?? 0)) {
+          heard.set(about.chat.id, reply.id);
+          raw.push({ ...base, k: "report", strand: about, text: reply.text });
+        }
         continue;
       }
       const step = stepOf(action, thread.id, running, state.sessions, "local");
