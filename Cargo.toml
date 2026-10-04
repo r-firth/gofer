@@ -1,0 +1,11 @@
+[workspace]
+members = ["crates/hub-server", "crates/hub-graphics"]
+default-members = ["crates/hub-server"]
+exclude = ["vendor/vecgra"]
+resolver = "2"
+
+[profile.dev]
+debug = 0
+
+[profile.release]
+lto = "thin"

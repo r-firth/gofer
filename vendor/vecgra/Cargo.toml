@@ -1,0 +1,9 @@
+[package]
+name = "vecgra"
+version = "0.1.2"
+edition = "2024"
+rust-version = "1.97"
+license = "Apache-2.0"
+[dependencies]
+memmap2 = "0.9.8"
+roaring = "=0.11.3"

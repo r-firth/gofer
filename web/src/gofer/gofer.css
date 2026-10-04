@@ -1,0 +1,1009 @@
+#root {
+  height: 100%;
+}
+@font-face {
+  font-family: "Symbols Nerd Font Mono";
+  src: url("/fonts/SymbolsNerdFontMono-Regular.ttf") format("truetype");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: block;
+}
+/* What the live product needs beyond the prototype's stylesheet: real replies (markdown), real
+   terminals, failure states, and the inherited memory viewer brought into the same voice. */
+.md {
+  margin: 0 0 0 var(--col);
+  max-width: none;
+  font-size: 14px;
+  line-height: 1.6;
+  text-wrap: pretty;
+}
+.md > :first-child {
+  margin-top: 0;
+}
+.md > :last-child {
+  margin-bottom: 0;
+}
+.md p,
+.md ul,
+.md ol,
+.md pre,
+.md table,
+.md blockquote {
+  margin: 0 0 10px;
+}
+.md ul,
+.md ol {
+  padding-left: 20px;
+}
+.md li + li {
+  margin-top: 2px;
+}
+.md code {
+  font: inherit;
+  color: var(--fg);
+  background: var(--wash);
+  border-radius: 3px;
+  padding: 0 4px;
+}
+.md pre {
+  padding: 8px 12px;
+  background: var(--well);
+  border-radius: 6px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--g1);
+}
+.md pre code {
+  background: none;
+  padding: 0;
+}
+.md a {
+  color: var(--fg);
+  text-decoration-color: var(--hair-3);
+  text-underline-offset: 3px;
+}
+.md a:hover {
+  text-decoration-color: currentColor;
+}
+.md strong {
+  font-weight: 700;
+}
+.md h1,
+.md h2,
+.md h3,
+.md h4 {
+  font-size: 14px;
+  font-weight: 700;
+  margin: 12px 0 4px;
+}
+/* a table takes the room its columns need, wraps at words as the pane narrows, and scrolls
+   sideways only when it cannot get any narrower */
+.md table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+}
+.md th,
+.md td {
+  vertical-align: top;
+}
+.md pre {
+  max-width: 100%;
+  overflow-x: auto;
+}
+.md th,
+.md td {
+  padding: 2px 12px 2px 0;
+  text-align: left;
+  border-bottom: 1px solid var(--hair);
+}
+.md blockquote {
+  padding-left: 12px;
+  border-left: 1px solid var(--hair-3);
+  color: var(--g1);
+}
+.streaming .md > :last-child::after {
+  content: "";
+  display: inline-block;
+  width: 1ch;
+  height: 16px;
+  margin-left: 2px;
+  background: var(--fg);
+  vertical-align: -3px;
+  animation: blink 1.1s steps(1) infinite;
+}
+.bh .q {
+  color: var(--g2);
+}
+.blk.err p,
+.blk.error p {
+  color: var(--peach);
+}
+.blk.error .bh b,
+.blk.err .bh b {
+  color: var(--peach);
+}
+.blk.note .bh b {
+  color: var(--g2);
+  font-weight: 400;
+}
+.answered .bh b {
+  font-weight: 400;
+  color: var(--g2);
+}
+.answered p {
+  color: var(--g1);
+}
+.stitch .lines {
+  margin-top: -8px;
+}
+.memrow {
+  margin-top: -8px;
+}
+.memrow .chips {
+  margin-top: 0;
+}
+.mem a {
+  color: var(--g1);
+  text-decoration: underline;
+  text-decoration-color: var(--hair-3);
+  text-underline-offset: 3px;
+}
+.mem a:hover {
+  color: var(--fg);
+}
+.ln.fail .ld {
+  color: var(--peach);
+}
+.ln.fail .ld::before {
+  content: "failed ";
+}
+.tag.err {
+  color: var(--peach);
+}
+.ask.in-strand {
+  margin-top: 12px;
+}
+.ask-f {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0 0 var(--col);
+}
+.ask-f label {
+  display: grid;
+  gap: 4px;
+}
+.ask-f span {
+  color: var(--g1);
+}
+.ask-f input {
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--hair-2);
+  border-radius: 6px;
+  background: var(--well);
+  color: var(--fg);
+  outline: 0;
+}
+.ask-f input:focus {
+  border-color: var(--hair-3);
+}
+.ask-f .kbtn {
+  justify-self: start;
+}
+.ask-n.err {
+  color: var(--peach);
+}
+.blk.view {
+  margin-left: var(--col);
+}
+
+/* a real shell */
+.tbox {
+  padding: 8px 4px 4px 12px;
+  background: var(--term);
+}
+/* What the shared terminal expects of the page around it, as in gofer. The surface
+   fills its box, so the fit is measured against the pane and not against whatever size the
+   screen last had. Ghostty draws the cursor on its canvas; its input layer must not paint a
+   second, browser caret beside it. The scrollback reader lies over the live screen, not under
+   it. */
+.tbox .ghostty-surface {
+  width: 100%;
+  height: 100%;
+  min-height: 100px;
+  overflow: visible;
+}
+.tbox .ghostty-surface canvas,
+.tbox .terminal-history-surface canvas {
+  display: block;
+}
+.tbox .ghostty-surface,
+.tbox .ghostty-surface textarea,
+.tbox .terminal-history-surface {
+  caret-color: transparent;
+  outline: 0;
+}
+.tbox .terminal-history-surface {
+  position: absolute;
+  inset: 8px 4px 4px 12px;
+  background: var(--term);
+  overflow: auto;
+  z-index: 1;
+  touch-action: pan-x;
+}
+@media (max-width: 900px) {
+  /* A phone zooms the page when it focuses an input under 16px. */
+  .tbox .ghostty-surface textarea {
+    font-size: 16px;
+  }
+}
+/* who the chat box talks to: a selector at its top left, and the list it opens */
+#to {
+  grid-column: 1/-1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 24px;
+  overflow: hidden;
+  margin: 0 0 6px -8px;
+}
+#say #to button {
+  margin: 0;
+}
+#say #to-b {
+  gap: 8px;
+  border: 1px solid var(--hair-2);
+  border-radius: 6px;
+  color: var(--g2);
+  max-width: 100%;
+  min-width: 0;
+}
+#to-b b {
+  color: var(--fg);
+}
+#to-b em {
+  font-style: normal;
+  color: var(--g1);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+#to-b i {
+  font-style: normal;
+  font-size: 10px;
+}
+#say #to-b[aria-expanded="true"] {
+  border-color: var(--hair-3);
+  background: var(--wash);
+}
+#say > .ps {
+  top: 42px;
+}
+/* talking to a session, not to Gofer: the box says so in colour */
+#say.tos {
+  border-top-color: var(--peach);
+  background: var(--peach-glow);
+}
+#say.tos #to-b {
+  border-color: var(--peach);
+}
+#say.tos #to-b b {
+  color: var(--peach);
+}
+#sw-away {
+  position: fixed;
+  inset: 0;
+  z-index: 19;
+  cursor: default;
+}
+#sw {
+  position: absolute;
+  z-index: 20;
+  left: calc(8px + var(--col));
+  bottom: calc(100% - 8px);
+  width: min(560px, calc(100% - 16px - var(--col)));
+  max-height: min(60vh, 440px);
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--hair-3);
+  border-radius: 8px;
+  background: var(--ink);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.55);
+  cursor: default;
+  animation: rise 0.12s ease-out;
+}
+#sw-q {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  height: 40px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--hair);
+}
+#sw-q input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  padding: 0;
+  background: none;
+  color: var(--fg);
+  caret-color: var(--peach);
+}
+#sw-q kbd {
+  color: var(--g2);
+}
+#sw-l {
+  min-height: 0;
+  overflow-y: auto;
+  padding: 4px 8px 8px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--hair-2) transparent;
+}
+#sw h6 {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin: 10px 8px 2px;
+  font: inherit;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--g2);
+  white-space: nowrap;
+}
+#sw h6 b {
+  font-weight: 400;
+}
+#sw h6 span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  letter-spacing: 0;
+  text-transform: none;
+  font-size: 12px;
+}
+#say #sw h6 button {
+  display: none;
+  height: 16px;
+  margin: 0 0 0 auto;
+  padding: 0 6px;
+  font-size: 12px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+#say #sw h6:hover button {
+  display: inline-flex;
+}
+#sw hr {
+  margin: 8px 8px 4px;
+  border: 0;
+  border-top: 1px dashed var(--hair-2);
+}
+/* naming a new thread or project, in the list's place */
+#sw-m {
+  display: grid;
+  grid-template-columns: 9ch minmax(0, 1fr);
+  gap: 8px 12px;
+  align-items: center;
+  padding: 12px 16px;
+}
+#sw-m label {
+  display: contents;
+  color: var(--g2);
+}
+#sw-m input,
+#sw-m select {
+  min-width: 0;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--hair-2);
+  border-radius: 6px;
+  background: var(--ink);
+  color: var(--fg);
+  font: inherit;
+  outline: 0;
+  caret-color: var(--peach);
+}
+#sw-m input:focus,
+#sw-m select:focus {
+  border-color: var(--hair-3);
+}
+#sw-m p {
+  grid-column: 1/-1;
+  margin: 0;
+  color: var(--g2);
+  white-space: normal;
+}
+#say #sw-m button {
+  grid-column: 1/-1;
+  justify-self: start;
+  margin: 0 0 0 -8px;
+}
+.swr {
+  display: grid;
+  grid-template-columns: 8px minmax(0, 1fr) auto auto;
+  column-gap: 12px;
+  align-items: center;
+  height: 28px;
+  padding: 0 8px;
+  border-radius: 6px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.swr.act {
+  background: var(--wash-2);
+}
+.swr span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.swr.thread span {
+  font-weight: 700;
+}
+.swr.new span,
+.swr.load span {
+  color: var(--g1);
+}
+#say .swr small {
+  grid-column: auto;
+  font-size: inherit;
+  color: var(--g2);
+}
+#say {
+  align-content: start;
+}
+.strand.ld .sx::before {
+  content: none;
+}
+/* a loaded session keeps to its one line however long its name */
+.strand.ld .sh {
+  flex-wrap: nowrap;
+  white-space: nowrap;
+}
+.strand.ld .sx {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.strand.ld .mach,
+.strand.ld .tag,
+.strand.ld .so {
+  flex: none;
+}
+.swr .d {
+  animation: pulse 2.4s ease-in-out infinite;
+}
+#say .swr button {
+  display: none;
+  height: 20px;
+  margin: 0;
+}
+#say .swr.act button {
+  display: inline-flex;
+}
+#sw .terr {
+  margin: 0;
+  padding: 0 16px 8px;
+}
+.terr {
+  font-style: normal;
+  color: var(--peach);
+}
+.head .lk b em {
+  font-style: normal;
+  font-weight: 400;
+  color: var(--g1);
+}
+/* a session in the thread is one line; "open" makes it the conversation */
+.so {
+  margin-left: 16px;
+  padding: 0 8px;
+  height: 22px;
+  border: 1px solid var(--hair-2);
+  border-radius: 6px;
+  background: none;
+  color: var(--g1);
+}
+.so:hover {
+  color: var(--fg);
+  border-color: var(--hair-3);
+  background: var(--wash);
+}
+.tag .tn {
+  color: var(--g2);
+}
+/* the session on screen: where he is, and the way back */
+#crumb {
+  flex: none;
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  min-width: 0;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--peach);
+  background: var(--peach-glow);
+  white-space: nowrap;
+}
+#crumb > button:first-child {
+  flex: none;
+  width: calc(var(--col) - 16px);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--g1);
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+#crumb > button:first-child:hover {
+  color: var(--fg);
+}
+#crumb .cp {
+  color: var(--peach);
+  font-weight: 700;
+}
+#crumb .ct {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--g1);
+}
+#conv.ses .tmore {
+  margin: 0 0 12px var(--col);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--g2);
+  text-align: left;
+}
+#conv.ses .tmore:hover {
+  color: var(--fg);
+}
+/* sessions found on a machine */
+.sr.ses {
+  grid-template-columns: 8ch minmax(0, 1fr) auto;
+  align-items: center;
+}
+.sr.ses .sl {
+  font-weight: 400;
+  color: var(--g2);
+}
+.sr.ses .st {
+  color: var(--fg);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.kbtn.vp {
+  height: 20px;
+  padding: 0 6px;
+  margin-right: 4px;
+}
+/* setting a machine up */
+.setup {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 16px;
+  overflow: auto;
+  background: var(--term);
+}
+.setup-h {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 32px;
+}
+.setup-p {
+  margin: 0 0 8px;
+  max-width: 64ch;
+  color: var(--g1);
+}
+.setup-e {
+  color: var(--peach);
+}
+.sr {
+  display: grid;
+  grid-template-columns: 14ch minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: start;
+  padding: 10px 0;
+  border-top: 1px solid var(--hair);
+}
+.sl {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+}
+.sr.ok .sl .d {
+  background: var(--sage);
+}
+.sr.missing .sl .d,
+.sr.needs_you .sl .d {
+  background: var(--peach);
+}
+.sr.optional .sl .d {
+  background: none;
+  box-shadow: inset 0 0 0 1px var(--g2);
+}
+.sd {
+  display: grid;
+  gap: 4px;
+  color: var(--g1);
+  text-wrap: pretty;
+}
+.sd em {
+  font-style: normal;
+  color: var(--g2);
+}
+.sr.ok .sd em {
+  color: var(--sage);
+}
+.sr.missing .sd em,
+.sr.needs_you .sd em {
+  color: var(--peach);
+}
+.sd code {
+  justify-self: start;
+  max-width: 100%;
+  padding: 4px 8px;
+  border: 1px solid var(--hair-2);
+  border-radius: 6px;
+  color: var(--fg);
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+.sd a {
+  color: var(--fg);
+}
+.sa {
+  display: flex;
+  gap: 8px;
+}
+.setup-out {
+  margin: 8px 0 0;
+  padding: 8px 12px;
+  border: 1px solid var(--hair);
+  border-radius: 6px;
+  color: var(--g1);
+  white-space: pre-wrap;
+}
+.sf {
+  display: grid;
+  grid-template-columns: 16ch minmax(0, 44ch);
+  gap: 16px;
+  align-items: center;
+  padding: 6px 0;
+  color: var(--g1);
+}
+.sf input {
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--hair-2);
+  border-radius: 6px;
+  background: none;
+  color: var(--fg);
+  outline: 0;
+  caret-color: var(--peach);
+}
+.sf input:focus {
+  border-color: var(--hair-3);
+}
+.kbtn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.th.add {
+  border: 0;
+  background: none;
+  color: var(--g2);
+}
+.th.add:hover,
+.th.add.sel {
+  color: var(--fg);
+}
+#vsetup {
+  height: 20px;
+  padding: 0 6px;
+  margin-right: 4px;
+}
+/* the machine's desktop, live */
+.screen {
+  display: grid;
+  background: var(--term);
+}
+.screen canvas,
+.screen video {
+  grid-area: 1 / 1;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  object-fit: contain;
+}
+.screen [hidden] {
+  display: none;
+}
+.screen-note {
+  grid-area: 1 / 1;
+  place-self: center;
+  max-width: 44ch;
+  margin: 0;
+  padding: 16px;
+  color: var(--g1);
+  text-align: center;
+  text-wrap: balance;
+}
+/* terminal and screen side by side; stacked when the stage is narrow */
+.panes {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+.panes > * {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+}
+.panes > * + * {
+  border-left: 1px solid var(--hair-2);
+}
+@media (max-width: 1100px) {
+  .panes {
+    flex-direction: column;
+  }
+  .panes > * + * {
+    border-left: 0;
+    border-top: 1px solid var(--hair-2);
+  }
+}
+#vmode {
+  flex: none;
+  display: inline-flex;
+  gap: 4px;
+  margin: 0 8px 0 12px;
+}
+#vmode .kbtn,
+#vwide {
+  height: 20px;
+  padding: 0 6px;
+}
+#vwide {
+  margin-right: 8px;
+}
+@media (max-width: 900px) {
+  /* A phone already gives the machine view the whole screen. */
+  #vwide {
+    display: none;
+  }
+}
+/* what a past step saw, above what it said */
+.term .shot {
+  display: block;
+  max-width: 100%;
+  max-height: 60%;
+  margin: 0 0 12px;
+  border: 1px solid var(--hair-2);
+  border-radius: 6px;
+}
+/* pictures in the thread span the column; a click shows one whole */
+.md img {
+  display: block;
+  /* the full width of the text column, at whatever width the pane is */
+  max-width: 100%;
+  max-height: 80vh;
+  width: auto;
+  height: auto;
+  margin: 8px 0;
+  border: 1px solid var(--hair-2);
+  border-radius: 6px;
+  background: var(--term);
+  cursor: zoom-in;
+}
+#zoom {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: var(--scrim);
+  cursor: zoom-out;
+}
+#zoom img {
+  max-width: 100%;
+  max-height: calc(100vh - 48px);
+  border: 1px solid var(--hair-3);
+  border-radius: 8px;
+  background: var(--term);
+}
+.term {
+  overflow: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--hair-2) transparent;
+}
+.hold-b {
+  margin: 12px auto 0;
+}
+#h-state .d {
+  background: none;
+  box-shadow: inset 0 0 0 1px currentColor;
+}
+#h-state.work .d,
+#h-state.need .d,
+#h-state.on .d {
+  background: currentColor;
+  box-shadow: none;
+}
+
+/* thumbnails: the machine's latest output, tiny but real */
+.tvt {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 6px;
+  margin: 0;
+  font-size: 5px;
+  line-height: 7px;
+  white-space: pre;
+  overflow: hidden;
+  color: var(--g1);
+  pointer-events: none;
+}
+.tv.hd {
+  background: var(--ink);
+}
+#strip {
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+#stage.all #grid {
+  grid-template-rows: none;
+  grid-auto-rows: minmax(232px, 1fr);
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+@media (min-width: 901px) {
+  #strip {
+    grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+  }
+}
+
+/* memory on a phone replaces the thread, like an open machine does */
+@media (max-width: 900px) {
+  #app.mm #stage {
+    display: grid;
+  }
+  #app.mm #thread {
+    display: none;
+  }
+}
+
+/* sign in: one slab on the ground */
+#signin {
+  position: relative;
+  z-index: 1;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+}
+#signin form {
+  display: grid;
+  gap: 16px;
+  width: min(360px, 100%);
+  padding: 24px;
+}
+#signin label {
+  display: grid;
+  gap: 4px;
+  color: var(--g2);
+}
+#signin input {
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--hair-2);
+  border-radius: 6px;
+  background: var(--well);
+  color: var(--fg);
+  outline: 0;
+}
+#signin input:focus {
+  border-color: var(--hair-3);
+}
+#signin .kbtn {
+  justify-self: start;
+}
+#signin .err {
+  margin: 0;
+  color: var(--peach);
+}
+#signin .dm {
+  margin: 0;
+}
+
+/* memory: four filters fit the 264-280px search column on one line */
+#mfil {
+  gap: 4px 12px;
+  padding: 12px;
+}
+
+/* a step is one quiet row; the whole command is in its detail */
+.ln .lx {
+  display: flex;
+  align-items: baseline;
+  min-width: 0;
+}
+.ln .lx > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ln.run .lx::after {
+  flex: none;
+}
+
+@media (max-width: 900px) {
+  #say > .ps {
+    top: 38px;
+  }
+  #sw {
+    left: 8px;
+    width: calc(100% - 16px);
+  }
+  #crumb > button:first-child {
+    width: auto;
+  }
+}
+
+/* the divider between the chat and the machines: drag it to resize the chat */
+#split {
+  position: absolute;
+  z-index: 5;
+  top: 22px;
+  bottom: 44px;
+  left: calc(10px + var(--tw));
+  width: 10px;
+  cursor: col-resize;
+  touch-action: none;
+}
+#split::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 4px;
+  width: 2px;
+  border-radius: 1px;
+  background: transparent;
+  transition: background 0.12s;
+}
+#split:hover::after,
+#app.rz #split::after {
+  background: var(--peach);
+}
+/* while dragging, nothing else takes the pointer or selects */
+#app.rz {
+  cursor: col-resize;
+  user-select: none;
+}
+#app.rz iframe,
+#app.rz canvas,
+#app.rz video {
+  pointer-events: none;
+}
+#app.wd #split {
+  display: none;
+}
+@media (max-width: 900px) {
+  #split {
+    display: none;
+  }
+}

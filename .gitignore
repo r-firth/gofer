@@ -1,0 +1,45 @@
+# Build output and dependencies
+/target/
+**/node_modules/
+/web/dist/
+/web/src/generated/gpu/
+/agent/.venv/
+__pycache__/
+.ruff_cache/
+**/tsconfig.tsbuildinfo
+
+# Private workspace data, including backups outside the default directory
+/data/
+*.vg
+*.vg.*
+*.db
+*.db-*
+*.sqlite
+*.sqlite-*
+*.sqlite3
+*.sqlite3-*
+*.log
+
+# Local configuration and credentials. Only the template belongs in Git.
+.env
+.env.*
+!.env.example
+.ssh/
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa
+id_ed25519
+push.json
+credentials.json
+auth.json
+.npmrc
+
+# Editor / OS files
+.DS_Store
+*.swp
+*.swo
+
+# Private working notes
+/notes/

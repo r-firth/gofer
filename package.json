@@ -1,0 +1,13 @@
+{
+  "devDependencies": {
+    "prettier": "^3.9.8"
+  },
+  "name": "gofer",
+  "private": true,
+  "scripts": {
+    "dev": "./scripts/dev.sh",
+    "build": "./scripts/build.sh",
+    "check": "./scripts/check.sh",
+    "format": "cargo fmt --all && prettier --write web/src web/vite.config.ts && agent/.venv/bin/ruff format agent/*.py scripts/*.py"
+  }
+}

@@ -1,0 +1,18 @@
+[project]
+name = "gofer-agent"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "claude-agent-sdk==0.2.163",
+    "jsonschema>=4.26,<5",
+    "openai-codex>=0.147.0",
+    "pydantic-core>=2.27",
+    "pywebpush>=2.5.0",
+]
+
+[dependency-groups]
+dev = [
+    "pillow>=12",
+    "ruff>=0.16.8",
+    "websockets>=15,<17",
+]

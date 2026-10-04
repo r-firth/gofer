@@ -1,0 +1,252 @@
+/* Embedded instruments use the app's theme.css and this compact UI kit.
+   Generated CSS supplies task-specific layouts and visualizations. */
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  padding: 16px;
+  color: var(--text);
+  background: var(--background);
+  font:
+    14px/1.5 "Chakra Petch",
+    sans-serif;
+  overflow-wrap: anywhere;
+}
+h1,
+h2,
+h3,
+p,
+dl {
+  margin: 0;
+}
+h1,
+h2,
+h3 {
+  font-family: var(--display);
+  font-weight: 600;
+  line-height: 1.3;
+}
+h1 {
+  font-size: 20px;
+}
+h2 {
+  font-size: 17px;
+}
+h3 {
+  font-size: 14px;
+}
+small,
+.tn-muted {
+  color: var(--muted);
+}
+small {
+  font-size: 12px;
+}
+a {
+  color: var(--accent);
+  text-underline-offset: 3px;
+}
+code,
+pre,
+output,
+.tn-mono {
+  font-family: var(--mono);
+}
+pre {
+  overflow: auto;
+  white-space: pre-wrap;
+}
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  background: var(--surface);
+  min-width: 0;
+  min-height: 36px;
+  padding: 8px 12px;
+  accent-color: var(--accent);
+}
+button {
+  cursor: pointer;
+  touch-action: manipulation;
+}
+button:hover:not(:disabled) {
+  border-color: var(--muted);
+}
+button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+button[aria-pressed="true"],
+button[aria-selected="true"],
+.tn-primary {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--raised);
+}
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+a:focus-visible,
+summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+}
+input,
+select,
+textarea {
+  background: var(--background);
+  width: 100%;
+}
+input::placeholder,
+textarea::placeholder {
+  color: var(--quiet);
+}
+input[type="checkbox"],
+input[type="radio"] {
+  width: auto;
+  min-height: 0;
+}
+input[type="range"] {
+  padding: 0;
+}
+textarea {
+  resize: vertical;
+}
+fieldset {
+  border: 1px solid var(--border);
+  min-width: 0;
+}
+legend {
+  color: var(--muted);
+  padding: 0 6px;
+}
+hr {
+  border: 0;
+  border-top: 1px solid var(--border);
+  margin: 4px 0;
+}
+table {
+  border-collapse: collapse;
+  width: 100%;
+  text-align: left;
+  font-size: 13px;
+}
+th {
+  color: var(--muted);
+  font-weight: 400;
+}
+th,
+td {
+  border-bottom: 1px solid var(--border);
+  padding: 9px 8px;
+}
+progress {
+  display: block;
+  appearance: none;
+  width: 100%;
+  height: 6px;
+  border: 0;
+  border-radius: 0;
+  background: var(--raised);
+  color: var(--accent);
+}
+progress::-webkit-progress-bar {
+  background: var(--raised);
+}
+progress::-webkit-progress-value {
+  background: var(--accent);
+}
+progress::-moz-progress-bar {
+  background: var(--accent);
+}
+img,
+svg,
+canvas {
+  max-width: 100%;
+}
+img {
+  height: auto;
+}
+.tn-stack {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+.tn-row,
+.tn-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+.tn-row {
+  justify-content: space-between;
+}
+.tn-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
+  gap: 12px;
+}
+.tn-panel {
+  padding: 14px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+.tn-label {
+  font: 10px/1.5 var(--mono);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+}
+.tn-readout {
+  font: 500 clamp(32px, 9vw, 56px)/1.1 var(--display);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.03em;
+}
+.tn-status {
+  color: var(--muted);
+  font: 11px/1.5 var(--mono);
+}
+.tn-status[data-state="working"] {
+  color: var(--accent);
+}
+.tn-status[data-state="done"] {
+  color: var(--green);
+}
+@media (max-width: 420px) {
+  body {
+    padding: 12px;
+  }
+  button,
+  input,
+  select {
+    min-height: 40px;
+  }
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}

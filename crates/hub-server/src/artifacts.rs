@@ -1,0 +1,273 @@
+//! Durable chat images. Only opaque, content-addressed IDs are exposed by HTTP;
+//! filesystem paths are read by agent tools, never by a browser file endpoint.
+use anyhow::{Context, Result, bail};
+use base64::{Engine, engine::general_purpose::STANDARD as B64};
+use image::{ImageFormat, ImageReader};
+use serde::{Deserialize, Serialize};
+use serde_json::{Value, json};
+use sha2::{Digest, Sha256};
+use std::{
+    fs::{self, File, OpenOptions},
+    io::{Cursor, Read, Write},
+    os::unix::fs::{OpenOptionsExt, PermissionsExt},
+    path::{Path, PathBuf},
+};
+
+pub const MAX_IMAGE_BYTES: usize = 25 * 1024 * 1024;
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ImageAttachment {
+    pub id: String,
+    pub url: String,
+    pub mime_type: String,
+    pub name: String,
+    pub caption: String,
+    pub width: u32,
+    pub height: u32,
+    pub bytes: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_path: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub device_id: Option<String>,
+}
+
+#[derive(Clone)]
+pub struct Artifacts {
+    root: PathBuf,
+}
+
+impl Artifacts {
+    pub fn new(root: PathBuf) -> Result<Self> {
+        fs::create_dir_all(&root)?;
+        fs::set_permissions(&root, fs::Permissions::from_mode(0o700))?;
+        Ok(Self { root })
+    }
+
+    pub fn path(&self, id: &str) -> Option<PathBuf> {
+        let (hash, extension) = id.split_once('.')?;
+        (hash.len() == 64
+            && hash.bytes().all(|b| b.is_ascii_hexdigit())
+            && matches!(extension, "png" | "jpg" | "gif" | "webp"))
+        .then(|| self.root.join(id))
+    }
+
+    pub fn save(
+        &self,
+        bytes: &[u8],
+        caption: &str,
+        source: Option<&str>,
+        device: Option<&str>,
+    ) -> Result<ImageAttachment> {
+        if bytes.len() > MAX_IMAGE_BYTES {
+            bail!("Images are limited to 25 MB");
+        }
+        let format =
+            image::guess_format(bytes).context("Expected a PNG, JPEG, GIF, or WebP image")?;
+        let (extension, mime) = match format {
+            ImageFormat::Png => ("png", "image/png"),
+            ImageFormat::Jpeg => ("jpg", "image/jpeg"),
+            ImageFormat::Gif => ("gif", "image/gif"),
+            ImageFormat::WebP => ("webp", "image/webp"),
+            _ => bail!("Expected a PNG, JPEG, GIF, or WebP image"),
+        };
+        let (width, height) = ImageReader::with_format(Cursor::new(bytes), format)
+            .into_dimensions()
+            .context("Invalid image header")?;
+        if width == 0 || height == 0 || u64::from(width) * u64::from(height) > 64_000_000 {
+            bail!("Images are limited to 64 megapixels");
+        }
+        let id = format!("{:x}.{extension}", Sha256::digest(bytes));
+        let path = self.root.join(&id);
+        if !path.exists() {
+            let temporary = self.root.join(format!(".{}", uuid::Uuid::new_v4()));
+            let result = (|| -> Result<()> {
+                let mut file = OpenOptions::new()
+                    .write(true)
+                    .create_new(true)
+                    .mode(0o600)
+                    .open(&temporary)?;
+                file.write_all(bytes)?;
+                file.sync_all()?;
+                fs::rename(&temporary, &path)?;
+                Ok(())
+            })();
+            if result.is_err() {
+                let _ = fs::remove_file(&temporary);
+            }
+            result?;
+        }
+        let name = source
+            .and_then(|p| Path::new(p).file_name())
+            .and_then(|n| n.to_str())
+            .unwrap_or("Image")
+            .to_owned();
+        Ok(ImageAttachment {
+            url: format!("/api/artifacts/{id}"),
+            id,
+            mime_type: mime.into(),
+            name,
+            caption: caption.chars().take(500).collect(),
+            width,
+            height,
+            bytes: bytes.len(),
+            source_path: source.map(str::to_owned),
+            device_id: device.map(str::to_owned),
+        })
+    }
+
+    pub fn local(&self, path: &str, caption: &str) -> Result<ImageAttachment> {
+        if !Path::new(path).is_absolute() {
+            bail!("Use an absolute image path");
+        }
+        if !fs::metadata(path)
+            .context("Could not open image file")?
+            .is_file()
+        {
+            bail!("Image path must be a regular file");
+        }
+        let file = File::open(path).context("Could not open image file")?;
+        if !file.metadata()?.is_file() {
+            bail!("Image path must be a regular file");
+        }
+        let mut bytes = Vec::new();
+        file.take(MAX_IMAGE_BYTES as u64 + 1)
+            .read_to_end(&mut bytes)?;
+        self.save(&bytes, caption, Some(path), Some("local"))
+    }
+
+    /// Normalize native image-generation, view-image, and arbitrary tool image
+    /// blocks through the same attachment path. Text and provenance stay intact.
+    pub fn normalize(&self, payload: &mut Value) {
+        if payload.get("images").is_some() || payload.get("image_errors").is_some() {
+            return;
+        }
+        let mut images = Vec::new();
+        let mut errors = Vec::new();
+        if let Some(result) = payload.pointer_mut("/result/result") {
+            self.visit(result, &mut images, &mut errors);
+        }
+        if !images.is_empty() {
+            payload["images"] = json!(images);
+        }
+        if !errors.is_empty() {
+            payload["image_errors"] = json!(errors);
+        }
+    }
+
+    fn encoded(&self, data: &str, caption: &str, path: Option<&str>) -> Result<ImageAttachment> {
+        let encoded = if data.starts_with("data:") {
+            let (header, encoded) = data.split_once(',').context("Invalid image data URL")?;
+            if !header.starts_with("data:image/") || !header.ends_with(";base64") {
+                bail!("Expected a base64 image data URL");
+            }
+            encoded
+        } else {
+            data
+        };
+        if encoded.len() > MAX_IMAGE_BYTES.div_ceil(3) * 4 {
+            bail!("Images are limited to 25 MB");
+        }
+        let bytes = B64.decode(encoded).context("Invalid base64 image")?;
+        self.save(&bytes, caption, path, None)
+    }
+
+    fn visit(
+        &self,
+        value: &mut Value,
+        images: &mut Vec<ImageAttachment>,
+        errors: &mut Vec<String>,
+    ) {
+        let kind = value["type"].as_str().unwrap_or("").to_owned();
+        let image = match kind.as_str() {
+            "imageGeneration" | "image_generation_call"
+                if value["result"].is_string() || value["savedPath"].is_string() =>
+            {
+                let path = value["savedPath"].as_str();
+                let image = match value["result"].as_str().filter(|s| !s.is_empty()) {
+                    Some(data) => self.encoded(data, "Generated image", path),
+                    None => self.local(path.unwrap_or(""), "Generated image"),
+                };
+                if image.is_ok() {
+                    value.as_object_mut().unwrap().remove("result");
+                }
+                Some(image)
+            }
+            "imageView" | "localImage" | "local_image" if value["path"].is_string() => {
+                Some(self.local(value["path"].as_str().unwrap(), ""))
+            }
+            "image" if value["data"].is_string() => {
+                let image = self.encoded(value["data"].as_str().unwrap(), "", None);
+                if image.is_ok() {
+                    value.as_object_mut().unwrap().remove("data");
+                }
+                Some(image)
+            }
+            "input_image" | "inputImage" | "image_url" | "image"
+                if value.get("image_url").is_some() || value.get("imageUrl").is_some() =>
+            {
+                let key = if value.get("image_url").is_some() {
+                    "image_url"
+                } else {
+                    "imageUrl"
+                };
+                let url = value[key]
+                    .as_str()
+                    .or_else(|| value[key]["url"].as_str())
+                    .unwrap_or("");
+                if url.starts_with("data:") {
+                    let image = self.encoded(url, "", None);
+                    if image.is_ok() {
+                        value.as_object_mut().unwrap().remove(key);
+                    }
+                    Some(image)
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        };
+        if let Some(result) = image {
+            match result {
+                Ok(image) => {
+                    value["attachment"] = json!(image);
+                    if !images.iter().any(|i| i.id == image.id) {
+                        images.push(image);
+                    }
+                }
+                Err(error) => {
+                    value["image_error"] = json!(error.to_string());
+                    errors.push(error.to_string());
+                }
+            }
+            return;
+        }
+        match value {
+            Value::Array(values) => {
+                for value in values {
+                    self.visit(value, images, errors);
+                }
+            }
+            Value::Object(fields) => {
+                for (key, value) in fields {
+                    // Our own attachments have already been validated and copied.
+                    if key == "images" {
+                        if let Ok(attached) =
+                            serde_json::from_value::<Vec<ImageAttachment>>(value.clone())
+                        {
+                            for image in attached {
+                                if self.path(&image.id).is_some()
+                                    && !images.iter().any(|i| i.id == image.id)
+                                {
+                                    images.push(image);
+                                }
+                            }
+                        }
+                    } else if key != "attachment" {
+                        self.visit(value, images, errors);
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+}

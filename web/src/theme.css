@@ -1,0 +1,24 @@
+/* Dark instrument enclosures, ivory hardware, and copper activity. */
+:root {
+  font-family: "Chakra Petch", sans-serif;
+  font-synthesis: none;
+  color-scheme: dark;
+  --bg: #101011;
+  --panel: #181818;
+  --raised: #242221;
+  --line: #353230;
+  --text: #f1efeb;
+  --muted: #aaa6a2;
+  --quiet: #817c77;
+  --orange: #ff995f;
+  --green: #7abe9b;
+  --mono: "IBM Plex Mono", monospace;
+  --background: var(--bg);
+  --surface: var(--panel);
+  --border: var(--line);
+  --accent: var(--orange);
+  --display: "Oxanium Variable", "Chakra Petch", sans-serif;
+  color: var(--text);
+  background: var(--bg);
+  font-size: 14px;
+}

@@ -1,0 +1,30 @@
+.install-app {
+  padding: 0 8px 12px;
+}
+.install-app > button {
+  min-height: 44px;
+  width: 100%;
+  font-size: 12px;
+}
+.install-app-help {
+  border-left: 1px solid var(--line);
+  margin: 0 0 8px 6px;
+  padding: 4px 10px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.install-app-help p + p {
+  margin-top: 10px;
+}
+.install-app-help strong {
+  font-weight: 500;
+  color: var(--text);
+}
+.install-app-help a {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--orange);
+  min-height: 44px;
+}
