@@ -13,7 +13,8 @@ import { createPortal } from "react-dom";
 import ReactMarkdown from "react-markdown";
 import { Link } from "@tanstack/react-router";
 import remarkGfm from "remark-gfm";
-import { api, type Event } from "../api";
+import { api, randomId, uploadImage, type Event } from "../api";
+import type { ChatImage } from "../ChatImages";
 import { AgentView, type ViewSpec } from "../AgentFeatures";
 import { Matrix } from "./matrix";
 import {
@@ -329,11 +330,44 @@ function Ask({
   );
 }
 
+/** The pictures he attached to a message. Clicking one shows it whole. */
+function Pictures({ images }: { images?: ChatImage[] }) {
+  if (!images?.length) return null;
+  return (
+    <div className="pics">
+      {images.map((image) => (
+        <img
+          key={image.id}
+          src={image.url}
+          alt={image.name}
+          title={image.name}
+          width={image.width}
+          height={image.height}
+          loading="lazy"
+          decoding="async"
+        />
+      ))}
+    </div>
+  );
+}
+
+const IMAGE_TYPES = ["image/png", "image/jpeg", "image/webp", "image/gif"];
+const MAX_IMAGES = 10;
+/** A picture in the chat box, stored on the server as soon as it is attached. */
+type Attachment = {
+  key: string;
+  name: string;
+  preview: string;
+  image?: ChatImage;
+  error?: string;
+};
+
 /** Interrupt a chat's current turn if it has one, then send it a message. */
 async function interruptAndSend(
   chatId: string,
   text: string,
   running: boolean,
+  images: { id: string; name: string }[] = [],
 ) {
   if (running) {
     await api(`/chats/${chatId}/stop`, {});
@@ -343,7 +377,7 @@ async function interruptAndSend(
       if (!state.running.includes(chatId)) break;
     }
   }
-  await api(`/chats/${chatId}/messages`, { text });
+  await api(`/chats/${chatId}/messages`, { text, images });
 }
 
 function StrandBlock({
@@ -557,12 +591,15 @@ function Session({
               <span className="gt" />
               <b>{strand.chat.loaded ? "you" : "asked"}</b>
             </div>
-            <p>
-              <i className="ps" aria-hidden="true">
-                ›
-              </i>
-              {row.turn.text}
-            </p>
+            {row.turn.text && (
+              <p>
+                <i className="ps" aria-hidden="true">
+                  ›
+                </i>
+                {row.turn.text}
+              </p>
+            )}
+            <Pictures images={row.turn.images} />
           </div>
         ) : (
           <div key={row.id} className="blk ha">
@@ -742,12 +779,15 @@ const Block = memo(
               <time className="gt">{clock(item.time)}</time>
               <b>you</b>
             </div>
-            <p>
-              <i className="ps" aria-hidden="true">
-                ›
-              </i>
-              {item.text}
-            </p>
+            {item.text && (
+              <p>
+                <i className="ps" aria-hidden="true">
+                  ›
+                </i>
+                {item.text}
+              </p>
+            )}
+            <Pictures images={item.images} />
           </div>
         );
       case "ha":
@@ -1296,6 +1336,9 @@ export function Thread({
   const busy = focus ? isRunning(focus.chat.id) : running;
   const focusName = focus ? machineName(focus.deviceId) : "";
   const [text, setText] = useState("");
+  const [attached, setAttached] = useState<Attachment[]>([]);
+  const [dropping, setDropping] = useState(false);
+  const picker = useRef<HTMLInputElement>(null);
   const [error, setError] = useState("");
   const [atEnd, setAtEnd] = useState(true);
   const [zoom, setZoom] = useState<string>();
@@ -1353,23 +1396,101 @@ export function Thread({
       ?.querySelector(".ln.sel")
       ?.scrollIntoView({ block: "center", behavior: "smooth" });
   }, [sel]);
+  /** Attach pictures (picked, pasted or dropped) and store each one straight away. */
+  function attach(files: File[]) {
+    setError("");
+    const room = MAX_IMAGES - attached.length;
+    if (files.length > room)
+      setError(`A message can carry up to ${MAX_IMAGES} images`);
+    const added = files.slice(0, Math.max(room, 0)).map((file) => {
+      const key = randomId();
+      const name = file.name || "Pasted image";
+      const problem =
+        file.type && !IMAGE_TYPES.includes(file.type)
+          ? "Only PNG, JPEG, WebP and GIF images can be attached"
+          : file.size > 25 * 1024 * 1024
+            ? "Images are limited to 25 MB"
+            : "";
+      const settle = (change: Partial<Attachment>) =>
+        setAttached((list) =>
+          list.map((a) => (a.key === key ? { ...a, ...change } : a)),
+        );
+      if (!problem)
+        uploadImage(file, name).then(
+          (image) => settle({ image }),
+          (err) =>
+            settle({ error: String(err instanceof Error ? err.message : err) }),
+        );
+      return {
+        key,
+        name,
+        // Only a picture gets a preview; anything else is shown by its name.
+        preview: file.type.startsWith("image/")
+          ? URL.createObjectURL(file)
+          : "",
+        error: problem || undefined,
+      };
+    });
+    setAttached((list) => [...list, ...added]);
+  }
+  function detach(key: string) {
+    setAttached((list) =>
+      list.filter((a) => {
+        if (a.key === key) URL.revokeObjectURL(a.preview);
+        return a.key !== key;
+      }),
+    );
+  }
   async function send(e: FormEvent) {
     e.preventDefault();
     const value = text.trim();
-    if (!value || !target) return;
+    if ((!value && !attached.length) || !target) return;
+    if (attached.some((a) => a.error))
+      return setError("Remove the images that could not be attached");
+    if (attached.some((a) => !a.image))
+      return setError("Wait for the images to finish uploading");
+    const sending = attached;
     setError("");
     setText("");
+    setAttached([]);
     try {
-      await interruptAndSend(target, value, busy);
+      await interruptAndSend(
+        target,
+        value,
+        busy,
+        sending.map((a) => ({ id: a.image!.id, name: a.name })),
+      );
+      sending.forEach((a) => URL.revokeObjectURL(a.preview));
       setAtEnd(true);
     } catch (err) {
       setText(value);
+      setAttached(sending);
       setError(String(err instanceof Error ? err.message : err));
     }
   }
+  const uploading = attached.some((a) => !a.image && !a.error);
   const later = (first: number) => sel !== undefined && first > sel;
   return (
-    <section id="thread" className="slab" aria-label="Thread">
+    <section
+      id="thread"
+      className="slab"
+      aria-label="Thread"
+      onDragOver={(e) => {
+        if (!e.dataTransfer.types.includes("Files")) return;
+        e.preventDefault();
+        setDropping(true);
+      }}
+      onDragLeave={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null))
+          setDropping(false);
+      }}
+      onDrop={(e) => {
+        if (!e.dataTransfer.files.length) return;
+        e.preventDefault();
+        setDropping(false);
+        attach([...e.dataTransfer.files]);
+      }}
+    >
       <Head rewound={rewound} thread={here?.main ? undefined : where} />
       {focus && (
         <div id="crumb">
@@ -1399,6 +1520,15 @@ export function Thread({
           const el = e.currentTarget;
           setAtEnd(el.scrollTop + el.clientHeight >= el.scrollHeight - 60);
         }}
+        onClick={(e) => {
+          // A picture in a reply or a message is a thumbnail; clicking it shows it whole.
+          const target = e.target as HTMLElement;
+          if (
+            target instanceof HTMLImageElement &&
+            target.closest(".md, .pics")
+          )
+            setZoom(target.currentSrc || target.src);
+        }}
       >
         {focus ? (
           <Session
@@ -1409,16 +1539,7 @@ export function Thread({
             onSelect={select}
           />
         ) : (
-          <div
-            id="conv"
-            onLoadCapture={stick}
-            onClick={(e) => {
-              // A picture in a reply is a thumbnail; clicking it shows it whole.
-              const target = e.target as HTMLElement;
-              if (target instanceof HTMLImageElement && target.closest(".md"))
-                setZoom(target.currentSrc || target.src);
-            }}
-          >
+          <div id="conv" onLoadCapture={stick}>
             {!items.length && (
               <div className="blk ha">
                 <div className="bh">
@@ -1486,7 +1607,10 @@ export function Thread({
         )}
       <form
         id="say"
-        className={focus ? "tos" : undefined}
+        className={
+          [focus && "tos", dropping && "drop"].filter(Boolean).join(" ") ||
+          undefined
+        }
         onSubmit={send}
         onClick={(e) => {
           if (!(e.target as HTMLElement).closest("button, #sw, #sw-away"))
@@ -1536,6 +1660,30 @@ export function Thread({
             </button>
           )}
         </div>
+        {attached.length > 0 && (
+          <div id="say-pics">
+            {attached.map((a) => (
+              <figure
+                key={a.key}
+                className={a.error ? "bad" : a.image ? undefined : "up"}
+                title={a.error ?? a.name}
+              >
+                {a.preview ? (
+                  <img src={a.preview} alt={a.name} />
+                ) : (
+                  <span>{a.name}</span>
+                )}
+                <button
+                  type="button"
+                  aria-label={`Remove ${a.name}`}
+                  onClick={() => detach(a.key)}
+                >
+                  ×
+                </button>
+              </figure>
+            ))}
+          </div>
+        )}
         <span className="ps" aria-hidden="true">
           ›
         </span>
@@ -1562,13 +1710,49 @@ export function Thread({
             }
             value={text}
             onChange={(e) => setText(e.target.value)}
+            onPaste={(e) => {
+              const files = [...e.clipboardData.files].filter((f) =>
+                f.type.startsWith("image/"),
+              );
+              if (!files.length) return;
+              e.preventDefault();
+              attach(files);
+            }}
           />
           <i id="bcur" ref={cursor.block} aria-hidden="true" />
         </span>
-        <button type="submit">
-          <kbd>enter</kbd>
-          {busy ? "interrupt and send" : "send"}
-        </button>
+        <span className="say-b">
+          <input
+            ref={picker}
+            type="file"
+            accept={IMAGE_TYPES.join(",")}
+            multiple
+            hidden
+            onChange={(e) => {
+              attach([...(e.target.files ?? [])]);
+              e.target.value = "";
+            }}
+          />
+          <button
+            type="button"
+            title="Attach images (or paste or drop them here)"
+            onClick={() => picker.current?.click()}
+          >
+            + image
+          </button>
+          <button type="submit" disabled={uploading}>
+            <kbd>enter</kbd>
+            {uploading ? "uploading" : busy ? "interrupt and send" : "send"}
+          </button>
+        </span>
+        {attached
+          .filter((a) => a.error)
+          .slice(0, 1)
+          .map((a) => (
+            <p key={a.key} id="say-err" role="status">
+              {a.name}: {a.error}
+            </p>
+          ))}
         <small>
           {error ||
             (focus

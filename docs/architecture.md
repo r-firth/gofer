@@ -148,6 +148,20 @@ Image blocks returned by native tools are extracted from tool results and shown
 inline. `show_image` publishes a file by absolute path from the host or, over
 SSH, from another machine. Images are validated, copied into
 `data/artifacts/` under a content hash, and served from `/api/artifacts/{id}`.
+
+The owner attaches pictures to a message with the chat box's `+ image` button,
+by pasting, or by dropping them on the thread. Each is posted on its own to
+`POST /api/uploads` (the file as the body, `?name=` as its label), checked by
+its bytes and stored as an artifact, and the message then names them:
+`{"text", "images":[{"id","name"}]}`, up to 10, with or without text. They are
+recorded in the `message.user` payload and shown with it. For the turn, the
+server hands the worker each picture as a file on the host (`images` in the
+task), as a smaller JPEG or PNG copy when it is over 2000 pixels a side or
+3.75 MB. Claude receives them as image blocks in the user message, Codex as
+image inputs (a local path, or the bytes for a Codex on another machine).
+Copilot sessions are told a picture was attached but are not shown it. Only
+the current message's pictures are sent; earlier ones stay in the history as
+their descriptions.
 PNG, JPEG, GIF and WebP are supported up to 25 MB and 64 megapixels. Copies
 remain available when the source file is removed or its machine disconnects.
 

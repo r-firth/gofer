@@ -1,6 +1,7 @@
 """Coordinator and native providers alongside persistent workspace tools."""
 
 import asyncio
+import base64
 import json
 import os
 import re
@@ -14,7 +15,13 @@ from urllib.parse import urlsplit
 
 import claude_backend
 import native
-from openai_codex import CodexConfig, TextInput, Thread
+from openai_codex import (
+    CodexConfig,
+    ImageInput,
+    LocalImageInput,
+    TextInput,
+    Thread,
+)
 from openai_codex.client import CodexClient
 from openai_codex.models import UnknownNotification
 from openai_codex.types import ReasoningEffort
@@ -53,10 +60,24 @@ def emit(kind, text=None, **payload):
     print(json.dumps({"type": kind, **payload}), flush=True)
 
 
-def run_decision(thread, prompt, model, structured=True):
+def image_inputs(images, remote):
+    """Codex turn inputs for attached pictures. A Codex on another machine cannot read a path
+    on the Gofer host, so it is sent the picture itself."""
+    if not remote:
+        return [LocalImageInput(image["path"]) for image in images]
+    return [
+        ImageInput(
+            f"data:{image['mime_type']};base64,"
+            + base64.b64encode(Path(image["path"]).read_bytes()).decode()
+        )
+        for image in images
+    ]
+
+
+def run_decision(thread, prompt, model, structured=True, images=()):
     """Stream native tool receipts before collecting the structured Gofer decision."""
     turn = thread.turn(
-        [TextInput(prompt)],
+        [TextInput(prompt), *images],
         model=model,
         effort=ReasoningEffort("medium"),
         output_schema=SCHEMA if structured else None,
@@ -408,6 +429,8 @@ def main():
     provider = agent["provider"] if agent else conversation["coordinator_provider"]
     execution = task.get("execution", {})
     memory = remembered(task["recall"])
+    # Pictures attached to this turn's message: files on the Gofer host.
+    images = task.get("images", [])
     env = os.environ.copy()
     for key in (
         "OPENAI_API_KEY",
@@ -496,6 +519,13 @@ The Gofer tool descriptions explain their arguments:
             "Continue",
         )
         if provider == "copilot":
+            if images:
+                # Copilot's ACP prompt is text here; say what it cannot see.
+                context += (
+                    "\n\n[@owner attached "
+                    + ", ".join(image["name"] for image in images)
+                    + ", which this session cannot be shown.]"
+                )
             local_port = urlsplit(os.environ["HUB_URL"]).port
             remote_port = (
                 30000 + secrets.randbelow(25000)
@@ -573,6 +603,7 @@ The Gofer tool descriptions explain their arguments:
                     request_input=lambda value: request_input(task["chat_id"], value),
                     call_tool=lambda name, args: call_tool(task["chat_id"], name, args),
                     needs_title=task.get("needs_title", False),
+                    images=images,
                 )
             )
 
@@ -656,7 +687,11 @@ The Gofer tool descriptions explain their arguments:
                 started = codex.thread_start({**params, "ephemeral": False})
             emit("session", native_id=started.thread.id)
             run_decision(
-                Thread(codex, started.thread.id), context, model, structured=False
+                Thread(codex, started.thread.id),
+                context,
+                model,
+                structured=False,
+                images=image_inputs(images, bool(execution.get("target"))),
             )
             return
         started = codex.thread_start({**params, "ephemeral": True})
@@ -668,7 +703,12 @@ The Gofer tool descriptions explain their arguments:
                 "status",
                 "Thinking" if prompt == context else "Reviewing the results",
             )
-            decision = run_decision(thread, prompt, model)
+            decision = run_decision(
+                thread,
+                prompt,
+                model,
+                images=image_inputs(images, False) if prompt == context else (),
+            )
             title = " ".join(str(decision.get("title") or "").split()).strip('"')[:80]
             if needs_title and title:
                 emit("title", name=title)

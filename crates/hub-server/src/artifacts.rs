@@ -14,6 +14,12 @@ use std::{
 };
 
 pub const MAX_IMAGE_BYTES: usize = 25 * 1024 * 1024;
+/// The most pictures one message can carry.
+pub const MAX_MESSAGE_IMAGES: usize = 10;
+/// What a model is handed: Claude takes up to 5 MB of base64 and 8000 pixels a side, and reads
+/// nothing finer than about 1600 pixels a side anyway. Larger pictures go as a smaller copy.
+const MODEL_IMAGE_BYTES: usize = 3_750_000;
+const MODEL_IMAGE_SIDE: u32 = 2000;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ImageAttachment {
@@ -133,6 +139,56 @@ impl Artifacts {
         file.take(MAX_IMAGE_BYTES as u64 + 1)
             .read_to_end(&mut bytes)?;
         self.save(&bytes, caption, Some(path), Some("local"))
+    }
+
+    /// A picture the owner attached to a message. Its name is only a label for the thread.
+    pub fn upload(&self, bytes: &[u8], name: &str) -> Result<ImageAttachment> {
+        let mut image = self.save(bytes, "", None, None)?;
+        let name: String = Path::new(name)
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("")
+            .chars()
+            .filter(|c| !c.is_control())
+            .take(200)
+            .collect();
+        if !name.trim().is_empty() {
+            image.name = name;
+        }
+        Ok(image)
+    }
+
+    /// A stored picture by its ID, as the attachment it was saved as.
+    pub fn stored(&self, id: &str, name: &str) -> Result<ImageAttachment> {
+        let path = self.path(id).context("Unknown image")?;
+        let bytes = fs::read(path).context("Unknown image")?;
+        self.upload(&bytes, name)
+    }
+
+    /// An absolute path to the picture to hand a model: the original when it is within what a
+    /// model takes, otherwise a smaller copy, stored beside it under its own content hash.
+    pub fn for_model(&self, image: &ImageAttachment) -> Result<PathBuf> {
+        let path = self.path(&image.id).context("Unknown image")?;
+        if image.bytes <= MODEL_IMAGE_BYTES && image.width.max(image.height) <= MODEL_IMAGE_SIDE {
+            return Ok(fs::canonicalize(path)?);
+        }
+        let picture = image::load_from_memory(&fs::read(&path)?).context("Invalid image")?;
+        let picture = picture.resize(
+            MODEL_IMAGE_SIDE,
+            MODEL_IMAGE_SIDE,
+            image::imageops::FilterType::Triangle,
+        );
+        let mut bytes = Vec::new();
+        if picture.color().has_alpha() {
+            picture.write_to(&mut Cursor::new(&mut bytes), ImageFormat::Png)?;
+        }
+        if bytes.is_empty() || bytes.len() > MODEL_IMAGE_BYTES {
+            bytes.clear();
+            image::codecs::jpeg::JpegEncoder::new_with_quality(&mut bytes, 85)
+                .encode_image(&picture.to_rgb8())?;
+        }
+        let copy = self.save(&bytes, "", None, None)?;
+        Ok(fs::canonicalize(self.root.join(copy.id))?)
     }
 
     /// Normalize native image-generation, view-image, and arbitrary tool image
@@ -269,5 +325,76 @@ impl Artifacts {
             }
             _ => {}
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn png(width: u32, height: u32) -> Vec<u8> {
+        let picture = image::RgbImage::from_fn(width, height, |x, y| {
+            image::Rgb([(x % 251) as u8, (y % 241) as u8, ((x ^ y) % 239) as u8])
+        });
+        let mut bytes = Vec::new();
+        picture
+            .write_to(&mut Cursor::new(&mut bytes), ImageFormat::Png)
+            .unwrap();
+        bytes
+    }
+
+    #[test]
+    fn uploads_keep_a_clean_name_and_are_found_again_by_id() {
+        let directory = tempfile::tempdir().unwrap();
+        let artifacts = Artifacts::new(directory.path().join("artifacts")).unwrap();
+        let image = artifacts
+            .upload(&png(3, 2), "../../etc/screen\u{7} shot.png")
+            .unwrap();
+        assert_eq!(image.name, "screen shot.png");
+        assert_eq!((image.width, image.height), (3, 2));
+        assert!(image.source_path.is_none() && image.device_id.is_none());
+        assert_eq!(artifacts.upload(&png(3, 2), "").unwrap().name, "Image");
+        let again = artifacts.stored(&image.id, "renamed.png").unwrap();
+        assert_eq!(
+            (again.id.as_str(), again.name.as_str()),
+            (image.id.as_str(), "renamed.png")
+        );
+        assert!(artifacts.stored(&"0".repeat(64), "").is_err());
+        assert!(artifacts.stored("../secret.png", "").is_err());
+        assert!(artifacts.upload(b"not an image", "notes.txt").is_err());
+        assert!(
+            artifacts
+                .upload(b"<svg xmlns='http://www.w3.org/2000/svg'/>", "a.svg")
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn a_model_gets_the_original_or_a_copy_within_its_limits() {
+        let directory = tempfile::tempdir().unwrap();
+        let artifacts = Artifacts::new(directory.path().join("artifacts")).unwrap();
+        let small = artifacts.upload(&png(40, 30), "small.png").unwrap();
+        let path = artifacts.for_model(&small).unwrap();
+        assert!(path.is_absolute());
+        assert_eq!(path.file_name().unwrap().to_str(), Some(small.id.as_str()));
+
+        let large = artifacts.upload(&png(4000, 1000), "wide.png").unwrap();
+        let copy = artifacts.for_model(&large).unwrap();
+        assert_ne!(copy.file_name().unwrap().to_str(), Some(large.id.as_str()));
+        let bytes = fs::read(&copy).unwrap();
+        assert!(bytes.len() <= MODEL_IMAGE_BYTES);
+        let (width, height) = ImageReader::new(Cursor::new(&bytes))
+            .with_guessed_format()
+            .unwrap()
+            .into_dimensions()
+            .unwrap();
+        assert_eq!((width, height), (2000, 500));
+        // The original stays as it was uploaded.
+        assert_eq!(
+            fs::metadata(artifacts.path(&large.id).unwrap())
+                .unwrap()
+                .len() as usize,
+            large.bytes
+        );
     }
 }

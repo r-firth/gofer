@@ -372,9 +372,11 @@ class WorkerTests(unittest.TestCase):
                 return SimpleNamespace(final_response=FINAL["text"])
 
             def turn(self, *args, **kwargs):
+                testcase.turns.append(args[0])
                 return SimpleNamespace(stream=lambda: iter(events))
 
         testcase = self
+        self.turns = []
 
         class FakeCodex:
             def __init__(self, config, **kwargs):
@@ -502,6 +504,25 @@ class WorkerTests(unittest.TestCase):
                 {"needs_title": False},
             )
         self.assertFalse(any(f["type"] == "title" for f in frames))
+
+    def test_attached_pictures_go_to_codex_with_the_message(self):
+        with tempfile.TemporaryDirectory() as data:
+            picture = Path(data) / "photo.jpg"
+            picture.write_bytes(b"\xff\xd8\xff fixture")
+            image = {"path": str(picture), "mime_type": "image/jpeg", "name": "a"}
+            self.run_worker(
+                [item_event("item/completed", FINAL), completed()],
+                data,
+                {"images": [image]},
+            )
+            # The coordinator runs on the Gofer host, so Codex reads the file itself.
+            self.assertEqual(self.turns[0][1:], [worker.LocalImageInput(str(picture))])
+            self.assertIsInstance(self.turns[0][0], worker.TextInput)
+            # A Codex on another machine is sent the picture's bytes.
+            self.assertEqual(
+                worker.image_inputs([image], remote=True),
+                [worker.ImageInput("data:image/jpeg;base64,/9j/IGZpeHR1cmU=")],
+            )
 
     def test_native_artifacts_survive_worker_exit(self):
         with tempfile.TemporaryDirectory() as data:

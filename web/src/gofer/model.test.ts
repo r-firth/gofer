@@ -316,6 +316,39 @@ describe("threadModel", () => {
   });
 });
 
+describe("attached pictures", () => {
+  const picture = {
+    id: `${"a".repeat(64)}.png`,
+    url: `/api/artifacts/${"a".repeat(64)}.png`,
+    mime_type: "image/png",
+    name: "screen.png",
+    caption: "",
+    width: 3,
+    height: 2,
+    bytes: 90,
+  };
+  const elsewhere = { ...picture, url: "https://example.com/x.png" };
+
+  it("come with his message, and only from the artifact store", () => {
+    const events = [
+      ev("thread", "message.user", { text: "", images: [picture, elsewhere] }),
+    ];
+    const items = threadModel(state(events, [chat({ thread: true })])).items;
+    const said = items.find((i) => i.k === "you");
+    expect(said?.k === "you" && said.images).toEqual([picture]);
+    expect(said?.k === "you" && said.text).toBe("");
+  });
+
+  it("count as a turn in a session even without words", () => {
+    const { events, chats } = turn();
+    events.push(
+      ev("strand", "message.user", { text: "", images: [picture] }, 5),
+    );
+    const strand = threadModel(state(events, chats)).strands.get("strand")!;
+    expect(strand.turns.at(-1)).toMatchObject({ you: true, images: [picture] });
+  });
+});
+
 describe("moving hosts", () => {
   it("shows work recorded under this host's old tailnet name on this machine", () => {
     const { events, chats } = turn();

@@ -14,6 +14,19 @@ export type ChatImage = {
   device_id?: string;
 };
 
+/** The pictures in a list that come from Gofer's artifact store; anything else is dropped. */
+export function validImages(images: unknown): ChatImage[] {
+  // All displayed files go through the authenticated artifact route. Never turn
+  // an arbitrary filesystem path or tool-supplied URL into a browser request.
+  return Array.isArray(images)
+    ? images.filter(
+        (image) =>
+          /^[a-f0-9]{64}\.(png|jpg|gif|webp)$/.test(image?.id) &&
+          image.url === `/api/artifacts/${image.id}`,
+      )
+    : [];
+}
+
 function ImageViewer({
   image,
   onClose,
@@ -142,15 +155,7 @@ export function ChatImages({
   images?: ChatImage[];
   errors?: string[];
 }) {
-  // All displayed files go through the authenticated artifact route. Never turn
-  // an arbitrary filesystem path or tool-supplied URL into a browser request.
-  const valid = Array.isArray(images)
-    ? images.filter(
-        (image) =>
-          /^[a-f0-9]{64}\.(png|jpg|gif|webp)$/.test(image.id) &&
-          image.url === `/api/artifacts/${image.id}`,
-      )
-    : [];
+  const valid = validImages(images);
   if (!valid.length && !errors?.length) return null;
   return (
     <div className="chat-images">

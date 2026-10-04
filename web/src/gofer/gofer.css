@@ -292,6 +292,101 @@
 #say.tos #to-b b {
   color: var(--peach);
 }
+/* pictures attached in the chat box, before they are sent */
+#say-pics {
+  grid-column: 1/-1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 8px;
+}
+#say-pics figure {
+  position: relative;
+  width: 56px;
+  height: 56px;
+  margin: 0;
+  border: 1px solid var(--hair-2);
+  border-radius: 4px;
+  overflow: hidden;
+  background: var(--term);
+}
+#say-pics figure.up img {
+  opacity: 0.4;
+}
+#say-pics figure.bad {
+  border-color: var(--peach);
+}
+#say-pics img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+#say #say-pics button {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 22px;
+  height: 22px;
+  margin: 0;
+  padding: 0;
+  justify-content: center;
+  color: var(--fg);
+  background: var(--scrim);
+}
+/* the prompt mark stays on the line he types on, below the pictures */
+#say-pics + .ps {
+  margin-top: 64px;
+}
+#say-pics figure > span {
+  display: block;
+  padding: 4px;
+  font-size: 11px;
+  line-height: 1.3;
+  word-break: break-all;
+  color: var(--g2);
+}
+#say-err {
+  grid-column: 1/-1;
+  margin: 4px 0 0;
+  color: var(--peach);
+}
+#say .say-b {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+#say .say-b button:first-of-type {
+  margin-right: 0;
+}
+#say button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+/* pictures dragged over the thread land in the chat box */
+#say.drop {
+  border-top-color: var(--peach);
+  background: var(--peach-wash);
+}
+/* pictures he sent, across the text column like pictures in a reply */
+.pics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 8px 0 0 var(--col, 0);
+}
+.pics img {
+  display: block;
+  max-width: 100%;
+  max-height: 60vh;
+  width: auto;
+  height: auto;
+  border: 1px solid var(--hair-2);
+  border-radius: 6px;
+  background: var(--term);
+  cursor: zoom-in;
+}
 #sw-away {
   position: fixed;
   inset: 0;

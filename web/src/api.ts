@@ -1,3 +1,5 @@
+import type { ChatImage } from "./ChatImages";
+
 export type Device = {
   id: string;
   name: string;
@@ -98,6 +100,27 @@ export async function api<T>(
     if (response.status === 401) throw new Error("AUTH_REQUIRED");
     const result = await response.json().catch(() => ({}));
     throw new Error(result.error || `Request failed (${response.status})`);
+  }
+  return response.json();
+}
+/** Store a picture to attach to a message. The server checks what it really is. */
+export async function uploadImage(
+  file: Blob,
+  name: string,
+): Promise<ChatImage> {
+  const response = await fetch(
+    `/api/uploads?name=${encodeURIComponent(name)}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": file.type || "application/octet-stream" },
+      body: file,
+    },
+  );
+  if (!response.ok) {
+    if (response.status === 401) throw new Error("AUTH_REQUIRED");
+    if (response.status === 413) throw new Error("Images are limited to 25 MB");
+    const result = await response.json().catch(() => ({}));
+    throw new Error(result.error || `Upload failed (${response.status})`);
   }
   return response.json();
 }

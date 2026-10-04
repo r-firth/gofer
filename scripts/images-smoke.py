@@ -13,6 +13,7 @@ import subprocess
 import tempfile
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
@@ -79,6 +80,12 @@ def main():
         (root / "agent/worker.py").write_text("""import json, os, sys, urllib.request
 task = json.loads(sys.stdin.readline())
 emit = lambda **frame: print(json.dumps(frame), flush=True)
+if task["images"]:
+    # A message with pictures: record what the worker was handed and stop there.
+    open(os.environ["TEST_RECEIVED"], "w").write(json.dumps({"images":task["images"],
+        "history":task["history"][-1]["payload"]}))
+    emit(type="message", text="Looked.")
+    sys.exit(0)
 emit(type="tool.result", name="image_generation", result={"ok":True,"result":{
     "type":"imageGeneration", "result":os.environ["TEST_PNG"], "revisedPrompt":"Synthetic image fixture"}})
 for device in ["local", os.environ["TEST_DEVICE"]]:
@@ -108,6 +115,7 @@ emit(type="message", text="Images displayed.")
             "TEST_IMAGE": str(source),
             "TEST_PNG": PNG,
             "TEST_DEVICE": "image-test",
+            "TEST_RECEIVED": str(root / "received.json"),
             "HUB_PUBLIC_ORIGIN": base,
             "HUB_ALLOWED_HOSTS": "",
         }
@@ -166,6 +174,7 @@ emit(type="message", text="Images displayed.")
                 image_url, auth=False, headers={"Cookie": "gofer_token=" + TOKEN}
             ) as response:
                 assert response.read() == base64.b64decode(PNG)
+            uploaded = check_uploads(base, root, api, wait_for, status)
             source.unlink()
             ssh.unlink()
             stop(child)
@@ -175,11 +184,82 @@ emit(type="message", text="Images displayed.")
             )["payload"]["images"]
             with request(image_url) as response:
                 assert response.read() == base64.b64decode(PNG)
+            with request(uploaded) as response:
+                assert response.read() == base64.b64decode(PNG)
             print(
-                "Images: generated + local + SSH; exact binary, path quoting, auth, MIME, persistence and offline replay passed."
+                "Images: generated + local + SSH + uploaded; exact binary, path quoting, auth, MIME, validation, delivery to the worker, persistence and offline replay passed."
             )
         finally:
             stop(child)
+
+
+def check_uploads(base, root, api, wait_for, status):
+    """Pictures the owner attaches: stored, validated, recorded with the message and handed to
+    the worker as files on the host. Returns the stored picture's URL."""
+
+    def upload(body, name="photo.png", auth=True):
+        headers = {"Content-Type": "image/png"}
+        if auth:
+            headers["Authorization"] = "Bearer " + TOKEN
+        request = urllib.request.Request(
+            base + "/api/uploads?" + urllib.parse.urlencode({"name": name}),
+            data=body,
+            headers=headers,
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=30) as response:
+                return response.status, json.load(response)
+        except urllib.error.HTTPError as error:
+            # Axum's body limit answers in plain text.
+            return error.code, error.read().decode()
+
+    def rejected(path, payload):
+        try:
+            api(path, payload)
+        except urllib.error.HTTPError as error:
+            return json.loads(error.read())["error"]
+        raise AssertionError("Expected the message to be refused")
+
+    code, image = upload(base64.b64decode(PNG), "../My photo.png")
+    assert code == 200, image
+    assert image["url"] == "/api/artifacts/" + image["id"], image
+    assert image["name"] == "My photo.png" and image["width"] == 1, image
+    assert "source_path" not in image, image
+    assert upload(base64.b64decode(PNG), auth=False)[0] == 401
+    assert upload(b"<svg xmlns='http://www.w3.org/2000/svg'/>", "x.png")[0] == 400
+    assert upload(b"GIF89a" + bytes(26 * 1024 * 1024))[0] == 413
+    chat = api("/chats", {})["id"]
+    assert "no longer available" in rejected(
+        f"/chats/{chat}/messages", {"text": "", "images": [{"id": "0" * 64 + ".png"}]}
+    )
+    assert "up to 10" in rejected(
+        f"/chats/{chat}/messages",
+        {"text": "x", "images": [{"id": image["id"]}] * 11},
+    )
+    # A picture alone is a message.
+    picture = {"id": image["id"], "name": image["name"]}
+    api(f"/chats/{chat}/messages", {"text": "", "images": [picture]})
+    received = wait_for(
+        lambda: (
+            json.loads(p.read_text())
+            if (p := root / "received.json").exists()
+            else None
+        )
+    )
+    handed = received["images"][0]
+    assert Path(handed["path"]).is_absolute(), handed
+    assert Path(handed["path"]).read_bytes() == base64.b64decode(PNG)
+    assert handed["mime_type"] == "image/png", handed
+    assert received["history"]["images"][0]["id"] == image["id"], received
+    state = wait_for(lambda: s if chat not in (s := api("/state"))["running"] else None)
+    said = next(
+        e for e in state["events"] if e["scope"] == chat and e["kind"] == "message.user"
+    )
+    assert said["payload"] == {"text": "", "images": [image]}, said
+    assert not [
+        e for e in state["events"] if e["scope"] == chat and e["kind"] == "agent.error"
+    ]
+    return image["url"]
 
 
 if __name__ == "__main__":

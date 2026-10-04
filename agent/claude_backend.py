@@ -5,6 +5,7 @@ then wrapped in the existing SSH transport. No CLI patching or credential reads.
 """
 
 import asyncio
+import base64
 import json
 import os
 import shutil
@@ -14,6 +15,7 @@ import uuid
 import warnings
 from collections import deque
 from dataclasses import replace
+from pathlib import Path
 
 import native
 from claude_agent_sdk import (
@@ -380,6 +382,32 @@ class Receipts:
                     )
 
 
+def with_images(text, images):
+    """A user message holding the turn's text and the pictures attached to it, for query()."""
+
+    async def messages():
+        content = [{"type": "text", "text": text}] if text else []
+        for image in images:
+            data = base64.b64encode(Path(image["path"]).read_bytes()).decode()
+            content.append(
+                {
+                    "type": "image",
+                    "source": {
+                        "type": "base64",
+                        "media_type": image["mime_type"],
+                        "data": data,
+                    },
+                }
+            )
+        yield {
+            "type": "user",
+            "message": {"role": "user", "content": content},
+            "parent_tool_use_id": None,
+        }
+
+    return messages()
+
+
 async def _run(
     *,
     prompt,
@@ -393,6 +421,7 @@ async def _run(
     request_input,
     call_tool,
     needs_title=False,
+    images=(),
 ):
     await asyncio.to_thread(check_subscription, target, cwd)
     cli = cli_path(target)
@@ -431,7 +460,9 @@ async def _run(
         await client.connect()
         for _ in range(50):
             native.emit("status", text="Thinking")
-            await client.query(prompt)
+            # Pictures belong to the owner's message, so only the first round carries them.
+            await client.query(with_images(prompt, images) if images else prompt)
+            images = ()
             receipts = Receipts(structured=bool(schema))
             result = None
             async for message in client.receive_response():

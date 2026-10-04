@@ -46,6 +46,7 @@ for line in sys.stdin:
   send({'type':'control_response','response':{'subtype':'success','request_id':q['request_id'],'response':{}}})
  elif q['type']=='user':
   rounds+=1
+  if isinstance(q['message']['content'],list): Path(os.environ['FIXTURE_PROMPT']).write_text(json.dumps(q['message']['content']))
   send({'type':'system','subtype':'init','session_id':'native-session'})
   if q['message']['content']=='CANCEL': continue
   if '--json-schema' in sys.argv:
@@ -315,7 +316,7 @@ class ReceiptTests(unittest.TestCase):
 
 
 class ClaudeTests(unittest.TestCase):
-    def run_fixture(self, schema=None, target=None, cancel=False):
+    def run_fixture(self, schema=None, target=None, cancel=False, images=()):
         output = io.StringIO()
         calls = []
         original_emit = claude.native.emit
@@ -341,6 +342,7 @@ class ClaudeTests(unittest.TestCase):
                     {
                         "PATH": directory + ":" + os.environ["PATH"],
                         "FIXTURE_INTERRUPT": str(marker),
+                        "FIXTURE_PROMPT": str(Path(directory) / "prompt"),
                         "HUB_CLAUDE_MODEL": "",
                     },
                 ),
@@ -365,10 +367,13 @@ class ClaudeTests(unittest.TestCase):
                             calls.append((name, args)) or {"ok": True}
                         ),
                         needs_title=True,
+                        images=images,
                     )
                 )
             if cancel:
                 self.assertEqual(marker.read_text(), "interrupted")
+            if images:
+                self.prompt = json.loads((Path(directory) / "prompt").read_text())
         return [json.loads(line) for line in output.getvalue().splitlines()], calls
 
     def test_cancellation_interrupts_the_remote_cli_before_closing_transport(self):
@@ -395,6 +400,33 @@ class ClaudeTests(unittest.TestCase):
                         "ok"
                     ]
                 )
+
+    def test_attached_pictures_reach_the_cli_as_image_blocks_with_the_text(self):
+        with tempfile.TemporaryDirectory() as directory:
+            picture = Path(directory) / "photo.png"
+            picture.write_bytes(b"\x89PNG fixture bytes")
+            image = {"path": str(picture), "mime_type": "image/png", "name": "a"}
+            for target in (None, "registered-device"):
+                with self.subTest(target=target):
+                    frames, _ = self.run_fixture(target=target, images=[image])
+                    self.assertEqual(
+                        self.prompt,
+                        [
+                            {"type": "text", "text": "Continue"},
+                            {
+                                "type": "image",
+                                "source": {
+                                    "type": "base64",
+                                    "media_type": "image/png",
+                                    "data": "iVBORyBmaXh0dXJlIGJ5dGVz",
+                                },
+                            },
+                        ],
+                    )
+                    self.assertEqual(
+                        [f["text"] for f in frames if f["type"] == "message"],
+                        ["Fresh answer"],
+                    )
 
     def test_coordinator_decisions_execute_workspace_tools_and_return_results(self):
         frames, calls = self.run_fixture(schema=SCHEMA)

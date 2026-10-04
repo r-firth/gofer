@@ -3,6 +3,7 @@
 import type { Chat, Device, Event, HubState, Session } from "../api";
 import { chatEntries, type ToolAction } from "../ToolActivity";
 import { activityName } from "../activity-kind";
+import { validImages, type ChatImage } from "../ChatImages";
 
 export type Tone = "on" | "work" | "need" | "idle" | "off";
 
@@ -50,7 +51,7 @@ export type Strand = {
   steps: Step[];
   result?: string;
   /** What was said in it, both ways, in order. */
-  turns: { id: number; you: boolean; text: string }[];
+  turns: { id: number; you: boolean; text: string; images?: ChatImage[] }[];
   ask?: Event;
   first: number;
   started: string;
@@ -62,7 +63,7 @@ export type Item = Base &
   (
     | { k: "day"; text: string }
     | { k: "gap"; text: string }
-    | { k: "you"; text: string }
+    | { k: "you"; text: string; images?: ChatImage[] }
     | { k: "ha"; text: string; streaming: boolean; interrupted: boolean }
     | { k: "error"; text: string }
     | { k: "note"; text: string }
@@ -408,12 +409,13 @@ function strandOf(chat: Chat, events: Event[], state: HubState): Strand {
       .filter(
         (e) =>
           ["message.user", "message.assistant"].includes(e.event.kind) &&
-          e.event.payload.text,
+          (e.event.payload.text || e.event.payload.images?.length),
       )
       .map((e) => ({
         id: e.event.id,
         you: e.event.kind === "message.user",
-        text: String(e.event.payload.text),
+        text: String(e.event.payload.text ?? ""),
+        images: validImages(e.event.payload.images),
       })),
     ask,
     first: events[0]?.id ?? 0,
@@ -522,7 +524,12 @@ export function threadModel(state: HubState) {
       continue;
     }
     if (event.kind === "message.user")
-      raw.push({ ...base, k: "you", text: String(event.payload.text) });
+      raw.push({
+        ...base,
+        k: "you",
+        text: String(event.payload.text ?? ""),
+        images: validImages(event.payload.images),
+      });
     else if (
       event.kind === "message.assistant" &&
       (event.payload.text || event.payload.streaming)

@@ -648,6 +648,18 @@ fn claude_model() -> String {
         .filter(|m| !m.is_empty())
         .unwrap_or("claude-opus-5-5".into())
 }
+/// A picture the owner attaches to a message, stored before the message is sent. The body is
+/// the file itself; its type is read from its bytes, not from what the browser claims.
+async fn upload_image(
+    State(h): State<Shared>,
+    Query(q): Query<HashMap<String, String>>,
+    body: axum::body::Bytes,
+) -> Api<Value> {
+    let artifacts = h.store.lock().unwrap().artifacts.clone();
+    let name = q.get("name").cloned().unwrap_or_default();
+    let image = tokio::task::spawn_blocking(move || artifacts.upload(&body, &name)).await??;
+    Ok(Json(json!(image)))
+}
 async fn image_artifact(State(h): State<Shared>, Path(id): Path<String>) -> Response {
     let path = h.store.lock().unwrap().artifacts.path(&id);
     let Some(path) = path else {
@@ -1646,7 +1658,8 @@ fn start_turn(h: &Shared, id: &str, p: &Value, view_action: Option<Value>) -> Ap
         bail_api("Conversation not found")?;
     }
     let text = p["text"].as_str().context("Message required")?.trim();
-    if text.is_empty() || text.len() > 64000 {
+    let images = message_images(h, &p["images"])?;
+    if (text.is_empty() && images.is_empty()) || text.len() > 64000 {
         bail_api("Message must contain 1–64000 characters")?;
     }
     let mut running = h.running.lock().unwrap();
@@ -1661,6 +1674,9 @@ fn start_turn(h: &Shared, id: &str, p: &Value, view_action: Option<Value>) -> Ap
         bail_api("The agent is already working in this conversation")?;
     }
     let mut message = json!({"text":text});
+    if !images.is_empty() {
+        message["images"] = json!(images);
+    }
     if let Some(action) = view_action {
         message["view_action"] = action;
     }
@@ -1697,6 +1713,34 @@ fn start_turn(h: &Shared, id: &str, p: &Value, view_action: Option<Value>) -> Ap
     running.insert(id.to_owned(), task.abort_handle());
     Ok(Json(json!({"ok":true})))
 }
+/// The uploaded pictures a message carries, given as `[{"id", "name"}]`. Only pictures already
+/// in the artifact store are accepted, and their details are read from the files themselves.
+fn message_images(
+    h: &Shared,
+    images: &Value,
+) -> Result<Vec<hub_server::artifacts::ImageAttachment>> {
+    let Some(images) = images.as_array() else {
+        return Ok(Vec::new());
+    };
+    if images.len() > hub_server::artifacts::MAX_MESSAGE_IMAGES {
+        bail!(
+            "A message can carry up to {} images",
+            hub_server::artifacts::MAX_MESSAGE_IMAGES
+        );
+    }
+    let artifacts = h.store.lock().unwrap().artifacts.clone();
+    let mut attached: Vec<hub_server::artifacts::ImageAttachment> = Vec::new();
+    for image in images {
+        let id = image["id"].as_str().context("Image ID required")?;
+        let image = artifacts
+            .stored(id, image["name"].as_str().unwrap_or(""))
+            .context("That image is no longer available. Attach it again.")?;
+        if !attached.iter().any(|a| a.id == image.id) {
+            attached.push(image);
+        }
+    }
+    Ok(attached)
+}
 /// The conversation events a turn's context is built from.
 fn context_events(h: &Shared, id: &str) -> Vec<Event> {
     h.history()
@@ -1711,6 +1755,10 @@ fn context_events(h: &Shared, id: &str) -> Vec<Event> {
 /// what was found before the turn starts. Without a query vector in time,
 /// text matches stand alone.
 async fn recall(h: &Shared, id: &str, text: &str) -> Result<Vec<Value>> {
+    // A message of pictures alone has nothing to search memory with.
+    if text.is_empty() {
+        return Ok(Vec::new());
+    }
     let started = std::time::Instant::now();
     let query: String = text.chars().take(2000).collect();
     let vector = tokio::time::timeout(
@@ -1925,6 +1973,15 @@ async fn agent_turn(h: &Shared, id: &str, recall: Vec<Value>) -> Result<()> {
     };
 
     let mut history = context_events(h, id);
+    // The pictures attached to this turn's message go to the model as files; the history only
+    // says they were there.
+    let attached = history
+        .iter()
+        .rev()
+        .find(|e| e.kind == "message.user")
+        .and_then(|e| serde_json::from_value(e.payload["images"].clone()).ok())
+        .unwrap_or_default();
+    let images = model_images(h, attached).await?;
     for event in &mut history {
         slim(&mut event.payload, 6000);
     }
@@ -1955,6 +2012,7 @@ async fn agent_turn(h: &Shared, id: &str, recall: Vec<Value>) -> Result<()> {
         "conversation": conversation,
         "project": h.project_of(id),
         "history": history,
+        "images": images,
         "recall": recall,
         "devices": h.devices(),
         "discovery": h.discovery.lock().unwrap().clone(),
@@ -2013,6 +2071,29 @@ async fn agent_turn(h: &Shared, id: &str, recall: Vec<Value>) -> Result<()> {
         );
     }
     Ok(())
+}
+/// The worker reads each picture from the Gofer host, as a copy the model can take.
+async fn model_images(
+    h: &Shared,
+    images: Vec<hub_server::artifacts::ImageAttachment>,
+) -> Result<Vec<Value>> {
+    let artifacts = h.store.lock().unwrap().artifacts.clone();
+    tokio::task::spawn_blocking(move || {
+        images
+            .iter()
+            .map(|image| {
+                let path = artifacts.for_model(image)?;
+                let mime = match path.extension().and_then(|e| e.to_str()) {
+                    Some("png") => "image/png",
+                    Some("gif") => "image/gif",
+                    Some("webp") => "image/webp",
+                    _ => "image/jpeg",
+                };
+                Ok(json!({"path":path,"mime_type":mime,"name":image.name}))
+            })
+            .collect()
+    })
+    .await?
 }
 async fn tool(State(h): State<Shared>, Json(p): Json<Value>) -> Api<Value> {
     let scope = p["chat_id"].as_str().context("Conversation required")?;
@@ -2634,6 +2715,12 @@ async fn main() -> Result<()> {
     let app = Router::new()
         .route("/api/state", get(state))
         .route("/api/artifacts/{id}", get(image_artifact))
+        .route(
+            "/api/uploads",
+            post(upload_image).layer(DefaultBodyLimit::max(
+                hub_server::artifacts::MAX_IMAGE_BYTES + 1024,
+            )),
+        )
         .route("/api/login", post(login))
         .route("/api/events", get(event_ws))
         .route("/api/devices", post(save_device))
