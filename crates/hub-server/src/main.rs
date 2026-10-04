@@ -2191,8 +2191,10 @@ async fn execute_tool(h: &Shared, chat_id: &str, name: &str, args: &Value) -> Re
                 .take(40)
                 .collect();
             events.reverse();
+            // What was said is read whole (within reason); what tools returned is cut short.
             for event in &mut events {
-                slim(&mut event.payload, 2000);
+                let said = event.kind.starts_with("message.");
+                slim(&mut event.payload, if said { 24_000 } else { 2000 });
             }
             Ok(
                 json!({"chat":chat,"running":h.running.lock().unwrap().contains_key(target),"events":events}),
