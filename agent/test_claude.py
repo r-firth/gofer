@@ -585,6 +585,29 @@ class ClaudeTests(unittest.TestCase):
 
         asyncio.run(check())
 
+    def test_a_held_sign_in_refresh_is_waited_out_and_other_failures_are_not(self):
+        calls = []
+
+        async def attempt():
+            calls.append(1)
+            if len(calls) < 3:
+                raise claude.ClaudeError(
+                    "Claude response failed: Failed to refresh OAuth token: another "
+                    "Claude Code process is refreshing it"
+                )
+            return "answered"
+
+        self.assertEqual(asyncio.run(claude.patiently(attempt, wait=0)), "answered")
+        self.assertEqual(len(calls), 3)
+
+        async def broken():
+            calls.append(1)
+            raise claude.ClaudeError("Claude response failed: rate limited")
+
+        with self.assertRaisesRegex(claude.ClaudeError, "rate limited"):
+            asyncio.run(claude.patiently(broken, wait=0))
+        self.assertEqual(len(calls), 4)
+
     def test_auth_preflight_accepts_a_subscription_login_or_token(self):
         for method in ("claude.ai", "oauth_token"):
             with patch.object(

@@ -119,7 +119,7 @@ async def extract(task, cwd):
             async for message in client.receive_response():
                 if isinstance(message, AssistantMessage) and message.error:
                     raise claude_backend.ClaudeError(
-                        "Memory consolidation failed: " + str(message.error)
+                        "Memory consolidation failed: " + claude_backend.said(message)
                     )
                 if isinstance(message, ResultMessage):
                     result = message
@@ -145,7 +145,10 @@ def main():
     root = Path(os.environ.get("HUB_ROOT", Path(__file__).resolve().parents[1]))
     cwd = Path(os.environ.get("HUB_DATA_DIR", root / "data")) / "consolidation"
     cwd.mkdir(parents=True, exist_ok=True)
-    print(json.dumps(asyncio.run(extract(task, str(cwd.resolve())))), flush=True)
+    claims = asyncio.run(
+        claude_backend.patiently(lambda: extract(task, str(cwd.resolve())))
+    )
+    print(json.dumps(claims), flush=True)
 
 
 if __name__ == "__main__":

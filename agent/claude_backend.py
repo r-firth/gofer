@@ -11,6 +11,7 @@ import shutil
 import signal
 import subprocess
 import uuid
+import warnings
 from collections import deque
 from dataclasses import replace
 
@@ -59,9 +60,37 @@ class SessionNotFound(ClaudeError):
     """The CLI has no saved conversation for the session it was asked to resume."""
 
 
+# The CLI refreshes its sign-in under a lock. A second process that needs the refresh at the same
+# moment (another turn, memory being written) is told so instead of being made to wait.
+REFRESHING = "Failed to refresh OAuth token"
+# Shown when permissions are bypassed and a permission callback is also set, which is how the
+# adapter runs. It is not an error and must not reach the conversation as one.
+warnings.filterwarnings("ignore", message="can_use_tool will not be invoked")
+
+
+def said(message):
+    """Why a response failed, in the API's own words when it gave any."""
+    return " ".join(
+        block.text.strip()
+        for block in message.content
+        if isinstance(block, TextBlock) and block.text.strip()
+    )[:400] or str(message.error)
+
+
+async def patiently(attempt, tries=4, wait=5):
+    """Run `attempt`, again after a pause while another process holds the sign-in refresh."""
+    for remaining in range(tries - 1, -1, -1):
+        try:
+            return await attempt()
+        except ClaudeError as error:
+            if REFRESHING not in str(error) or not remaining:
+                raise
+            await asyncio.sleep(wait)
+
+
 async def run(**kwargs):
     try:
-        return await _run(**kwargs)
+        return await patiently(lambda: _run(**kwargs))
     except ClaudeError:
         raise
     except Exception as error:
@@ -297,17 +326,9 @@ class Receipts:
                 raise ClaudeError(
                     "Claude authentication failed. Run claude auth login on the execution device."
                     if message.error == "authentication_failed"
-                    else "Claude response failed: "
-                    + (
-                        # The API's own words say what to do (a model this CLI is too old
-                        # for, a limit reached); the error kind alone does not.
-                        " ".join(
-                            block.text.strip()
-                            for block in message.content
-                            if isinstance(block, TextBlock) and block.text.strip()
-                        )[:400]
-                        or str(message.error)
-                    )
+                    # The API's own words say what to do (a model this CLI is too old for, a
+                    # limit reached); the error kind alone does not.
+                    else "Claude response failed: " + said(message)
                 )
             text = ""
 

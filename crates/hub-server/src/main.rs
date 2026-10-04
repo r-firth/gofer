@@ -1955,8 +1955,11 @@ async fn agent_turn(h: &Shared, id: &str, recall: Vec<Value>) -> Result<()> {
         text
     });
     let mut lines = BufReader::new(child.stdout.take().unwrap()).lines();
+    // The worker says why it failed before it exits; its exit is then not a second failure.
+    let mut explained = false;
     while let Some(line) = lines.next_line().await? {
         let frame: Value = serde_json::from_str(&line).context("Invalid agent response")?;
+        explained |= frame["type"] == "error";
         if frame["type"] == "title" {
             if h.chats().iter().any(|c| c.id == id && !c.title_generated)
                 && let Some(name) = frame["name"].as_str().and_then(conversations::clean_title)
@@ -1983,7 +1986,7 @@ async fn agent_turn(h: &Shared, id: &str, recall: Vec<Value>) -> Result<()> {
     let status = child.wait().await?;
     process_group.1 = false;
     let errors = errors.await.unwrap_or_default();
-    if !status.success() {
+    if !status.success() && !explained {
         bail!(
             "Agent worker exited: {}",
             errors.chars().take(1500).collect::<String>()
