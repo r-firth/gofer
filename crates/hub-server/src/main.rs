@@ -587,6 +587,11 @@ async fn state(State(h): State<Shared>) -> Api<Value> {
         .filter(|e| e.kind == "message.assistant")
         .filter_map(|e| e.payload["message_id"].as_str())
         .collect();
+    let thought: std::collections::HashSet<&str> = events
+        .iter()
+        .filter(|e| e.kind == "agent.thinking")
+        .filter_map(|e| e.payload["thinking_id"].as_str())
+        .collect();
     let history: Vec<_> = events
         .iter()
         .filter(|e| match e.kind.as_str() {
@@ -594,6 +599,9 @@ async fn state(State(h): State<Shared>) -> Api<Value> {
             "message.delta" => !e.payload["message_id"]
                 .as_str()
                 .is_some_and(|id| finished.contains(id)),
+            "thinking.delta" => !e.payload["thinking_id"]
+                .as_str()
+                .is_some_and(|id| thought.contains(id)),
             _ => true,
         })
         .cloned()
@@ -2057,6 +2065,8 @@ async fn agent_turn(h: &Shared, id: &str, recall: Vec<Value>) -> Result<()> {
             Some("message") => "message.assistant",
             Some("message.started") => "message.started",
             Some("message.delta") => "message.delta",
+            Some("thinking.delta") => "thinking.delta",
+            Some("thinking") => "agent.thinking",
             Some("error") => "agent.error",
             Some("status") => "agent.status",
             Some("session") => "agent.session",

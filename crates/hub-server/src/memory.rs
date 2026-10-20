@@ -19,7 +19,12 @@ pub struct MemoryIndex {
 fn transport(kind: &str) -> bool {
     matches!(
         kind,
-        "message.started" | "message.delta" | "tool.output" | "agent.status"
+        "message.started"
+            | "message.delta"
+            | "tool.output"
+            | "agent.status"
+            | "thinking.delta"
+            | "agent.thinking"
     )
 }
 pub fn category(kind: &str) -> &'static str {

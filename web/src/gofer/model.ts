@@ -73,6 +73,8 @@ export type Item = Base &
     | { k: "tell"; strand: Strand; text: string }
     /** What a strand said back, where Gofer read it. */
     | { k: "report"; strand: Strand; text: string }
+    /** What the model thought before acting, as a summary; `live` while it is still coming. */
+    | { k: "think"; text: string; live: boolean }
     | { k: "ask"; event: Event }
     | { k: "view"; event: Event }
     | { k: "recalled"; items: RecallItem[]; mode?: string }
@@ -439,8 +441,14 @@ export function threadModel(state: HubState) {
   const entries = chatEntries(events);
   // Beside what was said: memory being read and written, and sessions loaded in as strands.
   const memory = events.filter(
-    (e) => e.kind.startsWith("memory.") || e.kind === "strand.loaded",
+    (e) =>
+      e.kind.startsWith("memory.") ||
+      e.kind === "strand.loaded" ||
+      e.kind === "thinking.delta" ||
+      e.kind === "agent.thinking",
   );
+  // Thinking arrives in pieces and then whole; both build one item per thinking block.
+  const thoughts = new Map<string, Extract<Item, { k: "think" }>>();
   const merged = [
     ...entries.map((entry) => ({ id: entry.event.id, entry })),
     ...memory.map((event) => ({ id: event.id, event })),
@@ -450,6 +458,26 @@ export function threadModel(state: HubState) {
     if ("event" in m) {
       const e = m.event;
       const base = { key: `m${e.id}`, first: e.id, time: e.time };
+      if (e.kind === "thinking.delta" || e.kind === "agent.thinking") {
+        const id = String(e.payload.thinking_id ?? e.id);
+        let item = thoughts.get(id);
+        if (!item) {
+          item = {
+            ...base,
+            key: `t${id}`,
+            k: "think",
+            text: "",
+            live: running,
+          };
+          thoughts.set(id, item);
+          raw.push(item);
+        }
+        if (e.kind === "agent.thinking") {
+          item.text = String(e.payload.text ?? "");
+          item.live = false;
+        } else item.text += String(e.payload.delta ?? "");
+        continue;
+      }
       if (e.kind === "memory.recalled" && e.payload.items?.length)
         raw.push({
           ...base,

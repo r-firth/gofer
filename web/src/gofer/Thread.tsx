@@ -829,6 +829,16 @@ const Block = memo(
             />
           </div>
         );
+      case "think":
+        return (
+          <div className={`blk think${item.live ? " live" : ""}${cls}`}>
+            <div className="bh">
+              <time className="gt">{clock(item.time)}</time>
+              <span className="q">thinking</span>
+            </div>
+            <Clamp text={item.text} />
+          </div>
+        );
       case "tell":
         return (
           <div className={`blk tell${cls}`}>

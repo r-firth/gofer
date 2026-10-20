@@ -1192,3 +1192,15 @@
   color: var(--fg);
   background: var(--wash);
 }
+
+/* what the model thought before it acted: quiet, and shorter until asked for */
+.blk.think .clamp {
+  margin-left: var(--col);
+}
+.blk.think .clamp p {
+  color: var(--g2);
+  font-style: italic;
+}
+.blk.think.live .q {
+  color: var(--g1);
+}

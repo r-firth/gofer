@@ -11,6 +11,7 @@ import os
 import shutil
 import signal
 import subprocess
+import time
 import uuid
 import warnings
 from collections import deque
@@ -234,6 +235,13 @@ class Receipts:
         self.structured = structured
         self.identity = str(uuid.uuid4())
         self.text = ""
+        # The thinking block being streamed: its index, its id, all of it, and what is still
+        # to be sent. Pieces go out a few times a second, and the whole of it at the end.
+        self.thinking_index = None
+        self.thinking_id = None
+        self.thinking = ""
+        self.thinking_unsent = ""
+        self.thinking_sent_at = 0.0
         self.tools = {}
         self.structured_index = None
         self.raw_decision = ""
@@ -243,6 +251,38 @@ class Receipts:
 
     def emit(self, kind, **payload):
         native.emit(kind, source="claude", **payload)
+
+    def think(self, kind, event):
+        """Stream a thinking block as it arrives. True when the event was part of one."""
+        if (
+            kind == "content_block_start"
+            and event.get("content_block", {}).get("type") == "thinking"
+        ):
+            self.thinking_index = event.get("index")
+            self.thinking_id = str(uuid.uuid4())
+            self.thinking = self.thinking_unsent = ""
+            return True
+        if self.thinking_index is None or event.get("index") != self.thinking_index:
+            return False
+        if kind == "content_block_delta":
+            piece = event.get("delta", {}).get("thinking", "")
+            self.thinking += piece
+            self.thinking_unsent += piece
+            if self.thinking_unsent and time.monotonic() - self.thinking_sent_at > 0.3:
+                self.emit(
+                    "thinking.delta",
+                    thinking_id=self.thinking_id,
+                    delta=self.thinking_unsent,
+                )
+                self.thinking_unsent = ""
+                self.thinking_sent_at = time.monotonic()
+            return True
+        if kind == "content_block_stop":
+            if self.thinking.strip():
+                self.emit("thinking", thinking_id=self.thinking_id, text=self.thinking)
+            self.thinking_index = None
+            return True
+        return False
 
     def seal(self):
         if self.text:
@@ -269,6 +309,8 @@ class Receipts:
             event = message.event
             delta = ""
             kind = event.get("type")
+            if self.think(kind, event):
+                return
             if kind in {
                 "message_start",
                 "message_stop",
@@ -437,6 +479,9 @@ async def _run(
         system_prompt={"type": "preset", "preset": "claude_code", "append": base},
         model=os.environ.get("HUB_CLAUDE_MODEL") or "claude-opus-5-5",
         effort="medium",
+        # Opus keeps its thinking to itself unless asked for a summary of it, which the
+        # thread shows while a turn works.
+        thinking={"type": "adaptive", "display": "summarized"},
         permission_mode="bypassPermissions",
         allowed_tools=["WebSearch", "WebFetch"],
         include_partial_messages=True,

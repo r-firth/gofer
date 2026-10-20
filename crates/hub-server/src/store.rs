@@ -451,7 +451,10 @@ impl Store {
         let query = query.to_lowercase();
         for event in self.events.iter() {
             // Keep transport chunks for replay; search the canonical answer.
-            if matches!(event.kind.as_str(), "message.started" | "message.delta") {
+            if matches!(
+                event.kind.as_str(),
+                "message.started" | "message.delta" | "thinking.delta" | "agent.thinking"
+            ) {
                 continue;
             }
             if (if event.kind == "terminal.output" {
