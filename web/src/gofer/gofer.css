@@ -1165,3 +1165,30 @@
   text-decoration: underline;
   text-underline-offset: 3px;
 }
+
+/* a turn in progress, and messages waiting for it */
+.blk.working .q {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--g1);
+}
+.blk.working .d {
+  animation: pulse 1.6s ease-in-out infinite;
+}
+.blk.you.queued {
+  opacity: 0.6;
+}
+.blk.you.queued .bh button {
+  margin-left: 8px;
+  padding: 0 6px;
+  height: 20px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--g2);
+}
+.blk.you.queued .bh button:hover {
+  color: var(--fg);
+  background: var(--wash);
+}

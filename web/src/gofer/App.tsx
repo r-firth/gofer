@@ -243,6 +243,25 @@ export function App() {
   const running = Boolean(
     data && model?.thread && data.running.includes(model.thread.id),
   );
+  // The current turn of the thread on screen: when it began, and the last thing it said it
+  // was doing (a status, or the tool it started).
+  const activity = useMemo(() => {
+    const id = model?.thread?.id;
+    if (!running || !id || !data) return undefined;
+    let since: string | undefined;
+    let text: string | undefined;
+    for (const e of data.events) {
+      if (e.scope !== id) continue;
+      if (e.kind === "agent.started") ((since = e.time), (text = undefined));
+      else if (e.kind === "agent.status") text = String(e.payload.text ?? "");
+      else if (e.kind === "tool.started")
+        text = `running ${String(e.payload.name ?? "a tool")
+          .replace(/^mcp__[^_]+(?:_[^_]+)*__/, "")
+          .replace(/_/g, " ")}`;
+      else if (e.kind === "message.started") text = "writing";
+    }
+    return since ? { since, text } : undefined;
+  }, [running, model?.thread?.id, data?.events]);
   const need =
     machines.some((m) => m.tone === "need") ||
     model?.items.some(
@@ -487,6 +506,7 @@ export function App() {
             onPick={pick}
             isRunning={(id) => Boolean(data?.running.includes(id))}
             rewound={rewound}
+            activity={activity}
             bar={
               current && (
                 <button

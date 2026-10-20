@@ -1272,6 +1272,34 @@ function Switch({
   );
 }
 
+/** A turn in progress: how long it has been going, and what it is doing now. */
+function Working({ activity }: { activity: { since: string; text?: string } }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+  const seconds = Math.max(
+    0,
+    Math.round((now - Date.parse(activity.since)) / 1000),
+  );
+  return (
+    <div className="blk ha working">
+      <div className="bh">
+        <span className="gt" />
+        <b>gofer</b>
+        <span className="q">
+          <i className="d" />
+          {(activity.text || "thinking").toLowerCase()} ·{" "}
+          {seconds < 60
+            ? `${seconds} s`
+            : `${Math.floor(seconds / 60)} min ${seconds % 60} s`}
+        </span>
+      </div>
+    </div>
+  );
+}
+
 export function Thread({
   items,
   sel,
@@ -1282,6 +1310,7 @@ export function Thread({
   onPick,
   isRunning,
   rewound,
+  activity,
   bar,
   threads,
   onThread,
@@ -1305,6 +1334,8 @@ export function Thread({
   isRunning: (chatId: string) => boolean;
   /** Set while a past step is selected: the clock shows that moment instead of now. */
   rewound?: { time: string; date: string };
+  /** What the thread's turn is doing, while one runs: since when, and its latest status. */
+  activity?: { since: string; text?: string };
   bar?: React.ReactNode;
   threads: ThreadTab[];
   onThread: (id: string) => void;
@@ -1334,6 +1365,36 @@ export function Thread({
     : "main";
   const target = focus?.chat.id ?? threadId;
   const busy = focus ? isRunning(focus.chat.id) : running;
+  // Messages written while a turn runs wait for it, rather than stopping it.
+  const [queued, setQueued] = useState<
+    { text: string; images: { id: string; name: string }[] }[]
+  >([]);
+  useEffect(() => {
+    if (busy || !queued.length || !target) return;
+    const waiting = queued;
+    setQueued([]);
+    interruptAndSend(
+      target,
+      waiting
+        .map((q) => q.text)
+        .filter(Boolean)
+        .join("\n\n"),
+      false,
+      waiting.flatMap((q) => q.images),
+    ).catch((err) => {
+      setQueued(waiting);
+      setError(String(err instanceof Error ? err.message : err));
+    });
+  }, [busy, target, queued.length]);
+  useEffect(() => setQueued([]), [target]);
+  async function stop() {
+    if (!target) return;
+    try {
+      await api(`/chats/${target}/stop`, {});
+    } catch (err) {
+      setError(String(err instanceof Error ? err.message : err));
+    }
+  }
   const focusName = focus ? machineName(focus.deviceId) : "";
   const [text, setText] = useState("");
   const [attached, setAttached] = useState<Attachment[]>([]);
@@ -1453,6 +1514,17 @@ export function Thread({
     setError("");
     setText("");
     setAttached([]);
+    if (busy) {
+      setQueued((q) => [
+        ...q,
+        {
+          text: value,
+          images: sending.map((a) => ({ id: a.image!.id, name: a.name })),
+        },
+      ]);
+      setAtEnd(true);
+      return;
+    }
     try {
       await interruptAndSend(
         target,
@@ -1578,6 +1650,33 @@ export function Thread({
                 onGrow={grow}
               />
             ))}
+            {busy &&
+              !focus &&
+              activity &&
+              !(last?.k === "ha" && last.streaming) && (
+                <Working activity={activity} />
+              )}
+            {queued.map((q, i) => (
+              <div key={i} className="blk you queued">
+                <div className="bh">
+                  <span className="gt" />
+                  <b>you</b>
+                  <span className="q">waiting for the current turn</span>
+                  <button
+                    type="button"
+                    onClick={() => setQueued(queued.filter((_, j) => j !== i))}
+                  >
+                    cancel
+                  </button>
+                </div>
+                <p>
+                  <i className="ps" aria-hidden="true">
+                    ›
+                  </i>
+                  {q.text || `${q.images.length} image(s)`}
+                </p>
+              </div>
+            ))}
           </div>
         )}
       </div>
@@ -1700,7 +1799,7 @@ export function Thread({
                   ? `steer ${focus.provider} on ${focusName} (interrupts it)`
                   : `message ${focus.provider} on ${focusName}`
                 : busy
-                  ? "message gofer (interrupts the current turn)"
+                  ? "message gofer (it goes in when this turn ends)"
                   : "message gofer"
             }
             aria-label={
@@ -1740,9 +1839,20 @@ export function Thread({
           >
             + image
           </button>
+          {busy && (
+            <button type="button" title="Stop the current turn" onClick={stop}>
+              stop
+            </button>
+          )}
           <button type="submit" disabled={uploading}>
             <kbd>enter</kbd>
-            {uploading ? "uploading" : busy ? "interrupt and send" : "send"}
+            {uploading
+              ? "uploading"
+              : busy && !focus
+                ? "queue"
+                : busy
+                  ? "steer"
+                  : "send"}
           </button>
         </span>
         {attached

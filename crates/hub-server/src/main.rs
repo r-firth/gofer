@@ -68,6 +68,9 @@ struct Hub {
     terminals: AsyncMutex<HashMap<String, Live>>,
     terminal_operations: Mutex<HashMap<String, Arc<AsyncMutex<()>>>>,
     attached_ids: Mutex<HashSet<String>>,
+    /// Terminals whose last recorded state is "starting": a retry that fails the same way is not
+    /// written again, so a machine that stays unreachable does not fill the store.
+    starting: Mutex<HashSet<String>>,
     terminal_lifecycle: AsyncMutex<()>,
     terminal_cleanup: Notify,
     running: Mutex<HashMap<String, tokio::task::AbortHandle>>,
@@ -371,7 +374,9 @@ async fn attached(hub: &Shared, id: &str) -> Result<(Arc<Terminal>, broadcast::R
     let may_have_shell = hub.terminal_may_have_shell(id);
     // Persist uncertainty before issuing a command that can create a detached
     // shell. A crash or ambiguous connection failure must not skip shutdown.
-    hub.record("session.starting", id, json!({}))?;
+    if hub.starting.lock().unwrap().insert(id.into()) {
+        hub.record("session.starting", id, json!({}))?;
+    }
     let (terminal, mut output) = match Terminal::open(id, d.target.as_deref(), &s.cwd).await {
         Ok(opened) => opened,
         Err(error) => {
@@ -379,11 +384,13 @@ async fn attached(hub: &Shared, id: &str) -> Result<(Arc<Terminal>, broadcast::R
                 && (terminal::rejected_before_command(&error.to_string())
                     || hub_server::ssh::rejected_before_command(&error))
             {
+                hub.starting.lock().unwrap().remove(id);
                 hub.record("session.not_started", id, json!({}))?;
             }
             return Err(error);
         }
     };
+    hub.starting.lock().unwrap().remove(id);
     hub.record("session.attached", id, json!({}))?;
     if hub.session(id).is_err() {
         terminal.disconnect();
@@ -2647,6 +2654,7 @@ async fn main() -> Result<()> {
         terminals: AsyncMutex::new(HashMap::new()),
         terminal_operations: Mutex::new(HashMap::new()),
         attached_ids: Mutex::new(HashSet::new()),
+        starting: Mutex::new(HashSet::new()),
         terminal_lifecycle: AsyncMutex::new(()),
         terminal_cleanup: Notify::new(),
         running: Mutex::new(HashMap::new()),
@@ -3103,6 +3111,7 @@ mod lifecycle_tests {
             terminals: AsyncMutex::new(HashMap::new()),
             terminal_operations: Mutex::new(HashMap::new()),
             attached_ids: Mutex::new(HashSet::new()),
+            starting: Mutex::new(HashSet::new()),
             terminal_lifecycle: AsyncMutex::new(()),
             terminal_cleanup: Notify::new(),
             running: Mutex::new(HashMap::new()),
